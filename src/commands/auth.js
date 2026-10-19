@@ -1,17 +1,17 @@
 import { parseArgs } from '../args.js';
 import { info } from '../output.js';
 import { askHidden } from '../prompts.js';
-import { loginInteractive, maskToken, loadCredentials, unlinkBot, withToken } from '../project/credentials.js';
+import { loginInteractive, loginWithToken, maskToken, unlinkBot, withToken } from '../project/credentials.js';
 import { getFiles } from '../api/endpoints.js';
 import { replaceSnapshot } from '../project/snapshot.js';
 import { saveStaticSnapshot } from '../project/static.js';
-import { loadState, saveState } from '../project/state.js';
+import { loadState, saveState, loadCredentials } from '../project/state.js';
 import { log } from '../logs.js';
 
 // login is the one command that asks for a token; logout forgets it.
 
 export async function registerAuth(command, argv) {
-  parseArgs(argv, {});
+  const parsed = parseArgs(argv, {});
 
   if (command === 'logout') {
     const saved = loadCredentials();
@@ -24,7 +24,12 @@ export async function registerAuth(command, argv) {
     return 0;
   }
 
-  const token = await loginInteractive((question) => askHidden(question));
+  // A pasted token bypasses the hidden prompt — handy in scripts and for
+  // anyone typing it straight onto the command line.
+  const pasted = parsed.positional[0];
+  const token = pasted !== undefined
+    ? await loginWithToken(String(pasted).trim())
+    : await loginInteractive((question) => askHidden(question));
   if (!token) return 1;
 
   // Bring the bot's current state down right away, so the first push is

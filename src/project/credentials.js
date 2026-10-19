@@ -102,9 +102,38 @@ export async function verifyToken(token) {
   }
 }
 
+// Shared tail of both login paths: check the candidate, save it if the server
+// takes it (or cannot be reached), and say what happened.
+export async function loginWithToken(token) {
+  if (!isValidFormat(token)) {
+    console.error('  That does not look like an access token — expected "app<id>:<secret>".');
+    return null;
+  }
+
+  const check = await verifyToken(token);
+  if (check.ok) {
+    saveCredentials(token);
+    console.log(`  Linked to ${maskToken(token)}.`);
+    log('info', 'login', 'Project linked to a bot.', { token: maskToken(token) });
+    return token;
+  }
+  if (check.network) {
+    saveCredentials(token);
+    console.log('  The server is unreachable, so the token was saved without verification.');
+    console.log('  The next online command will confirm it.');
+    log('warn', 'login', 'Token saved but not verified (network unreachable).', { token: maskToken(token) });
+    return token;
+  }
+  console.error('  The server rejected that token.');
+  return null;
+}
+
 // Loops until a working token is saved, the terminal closes, or the user is
-// done. The only place a token is ever asked for.
-export async function loginInteractive(prompt) {
+// done. `preset` short-circuits the prompt (a token handed to "login" on the
+// command line); the TTY check only applies when something has to be asked.
+export async function loginInteractive(prompt, preset) {
+  if (preset !== undefined) return loginWithToken(String(preset).trim());
+
   if (process.stdin.isTTY !== true) {
     console.error('"tgpilot login" needs an interactive terminal. For scripts, set TGPILOT_TOKEN instead.');
     return null;
@@ -132,27 +161,9 @@ export async function loginInteractive(prompt) {
       console.error('  A token is required.');
       continue;
     }
-    if (!isValidFormat(token)) {
-      console.error('  That does not look like an access token — expected "app<id>:<secret>".');
-      continue;
-    }
 
-    const check = await verifyToken(token);
-    if (check.ok) {
-      saveCredentials(token);
-      console.log(`  Linked to ${maskToken(token)}.`);
-      log('info', 'login', 'Project linked to a bot.', { token: maskToken(token) });
-      return token;
-    }
-    if (check.network) {
-      saveCredentials(token);
-      console.log('  The server is unreachable, so the token was saved without verification.');
-      console.log('  The next online command will confirm it.');
-      log('warn', 'login', 'Token saved but not verified (network unreachable).', { token: maskToken(token) });
-      return token;
-    }
-    console.error('  The server rejected that token.');
-    console.error('  Get a fresh one from @BotFather: your bot → Serverless → CLI Access → Access token.');
+    const linked = await loginWithToken(token);
+    if (linked) return linked;
   }
 }
 
