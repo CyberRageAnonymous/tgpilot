@@ -7,6 +7,7 @@ const state = {
   section: null,
   folderPath: '',
   tree: [],
+  handlerTypes: [],
   staticSource: null,
   openPath: null,
   dirty: false,
@@ -197,6 +198,7 @@ async function refreshProject() {
   const info = await GET('/api/project');
   state.runnable = info.runnable || ['handlers', 'endpoints'];
   state.staticSource = info.static ? info.static.source : null;
+  state.handlerTypes = info.handlerTypes || [];
   const token = info.token;
   $('bot-token').textContent = token ? `bot ${token.masked}` : 'not linked';
   $('bot-token').classList.toggle('linked', Boolean(token));
@@ -267,6 +269,16 @@ function plural(n) {
   return `${n} file${n === 1 ? '' : 's'}`;
 }
 
+// --- tree cache --------------------------------------------------------------
+// The home screen counts live off the tree, so the whole studio reads it once
+// and after every change; the section views go through /api/list themselves.
+
+async function loadTree() {
+  const out = await GET('/api/tree');
+  state.tree = out.tree;
+  updateHomeSubs();
+}
+
 // --- sections ----------------------------------------------------------------
 
 async function openSection(key) {
@@ -319,8 +331,9 @@ async function openFolder(rel) {
 
   const out = await GET(`/api/list?path=${encodeURIComponent(rel)}`);
   if (!out.entries.length) {
-    host.innerHTML = '<div class="empty">Nothing here yet — the + button creates a starter.</div>';
-    return;
+    host.innerHTML = state.section === 'handlers'
+      ? '' // the update-type rows follow; an empty handlers folder is normal
+      : '<div class="empty">Nothing here yet — the + button creates a starter.</div>';
   }
   for (const entry of out.entries) {
     const path = rel ? `${rel}/${entry.name}` : entry.name;
@@ -330,8 +343,8 @@ async function openFolder(rel) {
     const icon = document.createElement('span');
     icon.className = 'file-ico';
     icon.innerHTML = entry.dir
-      ? '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2.5h9v8.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/></svg>'
-      : '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M14 3.5V8h4.5"/></svg>';
+      ? ICONS.folder
+      : ICONS.file;
     row.appendChild(icon);
 
     if (entry.dir) {
@@ -359,6 +372,61 @@ async function openFolder(rel) {
     }
     host.appendChild(row);
   }
+
+  // The Handlers section is one file per Telegram update type, flat. Show the
+  // platform's whole list; types without a file yet become one-tap starters,
+  // so the studio mirrors the real panel instead of a plain folder dump.
+  if (state.section === 'handlers') {
+    const existing = new Set(
+      out.entries.filter((e) => !e.dir).map((e) => e.name.replace(/\.js$/, ''))
+    );
+    for (const t of state.handlerTypes || []) {
+      if (existing.has(t.type)) continue;
+      const row = document.createElement('button');
+      row.className = 'file-row ghost-row';
+
+      const icon = document.createElement('span');
+      icon.className = 'file-ico';
+      icon.innerHTML = ICONS.file;
+      row.appendChild(icon);
+
+      const name = document.createElement('span');
+      name.className = 'file-name';
+      name.textContent = `${t.type}.js`;
+      row.appendChild(name);
+
+      const sub = document.createElement('span');
+      sub.className = 'file-sub wide';
+      sub.textContent = t.handles;
+      row.appendChild(sub);
+
+      const create = document.createElement('span');
+      create.className = 'create-chip';
+      create.textContent = '+ create';
+      row.appendChild(create);
+
+      row.onclick = () => createHandler(t.type).catch(showError);
+      host.appendChild(row);
+    }
+    const more = document.createElement('div');
+    more.className = 'empty';
+    more.textContent = 'Any other Bot API update type works too — use + module and name the file after it.';
+    host.appendChild(more);
+  }
+}
+
+const ICONS = {
+  folder: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2.5h9v8.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/></svg>',
+  file: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M14 3.5V8h4.5"/></svg>',
+};
+
+async function createHandler(type) {
+  const starter = await GET(`/api/starter?kind=handlers&name=${encodeURIComponent(type)}`);
+  const path = `tgcloud/handlers/${type}.js`;
+  await POST('/api/file', { path, content: starter.content });
+  toast(`handlers/${type} created`);
+  await loadTree().catch(() => {});
+  await openPath(path);
 }
 
 function crumbParts(rel, base) {

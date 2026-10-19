@@ -15,6 +15,7 @@ import { readDisk, writeDisk, unlinkDisk, existsDisk, displayPath } from '../pro
 import { changeCard, changeId } from '../project/changes.js';
 import { serverErrorText } from '../api/client.js';
 import { log, readLogs, clearLogs, LEVELS } from '../logs.js';
+import { moduleStarter, UPDATE_TYPES } from '../templates.js';
 import { parse } from '../json5.js';
 import { computeDiff } from '../diff.js';
 import { resolveRunnablePath } from '../commands/run.js';
@@ -32,6 +33,7 @@ export function createRoutes(root, uiDir) {
     ['GET /api/project', () => handleProjectInfo(project)],
     ['GET /api/tree', () => handleTree(project)],
     ['GET /api/list', (body, query) => handleList(project, query)],
+    ['GET /api/starter', (body, query) => handleStarter(query)],
     ['GET /api/file', (body, query) => handleFileRead(project, query)],
     ['POST /api/file', (body) => handleFileWrite(project, body)],
     ['DELETE /api/file', (body) => handleFileDelete(project, body)],
@@ -183,6 +185,7 @@ async function handleProjectInfo(project) {
     scaffold: scaffoldEntries(),
     configFileName: configFileName(),
     schemaVersion: descriptor?.project_schema_version ?? null,
+    handlerTypes: UPDATE_TYPES,
     static: staticBlock && !staticBlock.remove
       ? { source: staticBlock.source, spa: staticBlock.config?.spa === true }
       : null,
@@ -207,6 +210,15 @@ function handleList(project, query) {
   // One flat folder listing for the studio's section views; '' is the root.
   const rel = query?.get('path') || '';
   return { ok: true, path: rel, entries: project.list(rel) };
+}
+
+function handleStarter(query) {
+  // The studio creates modules from the same starters the CLI scaffolds.
+  const kind = query?.get('kind');
+  const name = query?.get('name') || '';
+  if (!['handlers', 'endpoints', 'lib'].includes(kind)) throw badRequest('Unknown module kind');
+  if (!/^[A-Za-z0-9_]+$/.test(name)) throw badRequest('Bad module name');
+  return { ok: true, content: moduleStarter(kind, name) };
 }
 
 function handleFileRead(project, query) {

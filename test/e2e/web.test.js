@@ -63,6 +63,18 @@ test('the studio serves the UI and a safe local API', async () => {
     const info = await api(port, '/api/project');
     assert.equal(info.status, 200, info.text);
     assert.deepEqual(info.json.static, { source: 'dist', spa: true });
+    assert.ok(info.json.handlerTypes.length >= 20);
+    assert.ok(info.json.handlerTypes.some((t) => t.type === 'callback_query'));
+
+    const starter = await api(port, '/api/starter?kind=handlers&name=callback_query');
+    assert.equal(starter.status, 200, starter.text);
+    assert.match(starter.json.content, /callback_query, ctx/);
+    const badStarter = await api(port, '/api/starter?kind=handlers&name=..\%2Fevil');
+    assert.equal(badStarter.status, 400);
+
+    const missing = await api(port, '/api/list?path=tgcloud%2Flib');
+    assert.equal(missing.status, 200);
+    assert.deepEqual(missing.json.entries, []);
 
     const forbidden = await api(port, '/api/file?path=.tgpilot%2Fstate.json');
     assert.equal(forbidden.status, 400);
