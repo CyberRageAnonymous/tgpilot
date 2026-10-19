@@ -36,7 +36,9 @@ export function createProjectFs(root) {
       return fs.readFileSync(abs, 'utf-8');
     },
     list(rel) {
-      const abs = safePath(rel || '.');
+      // No rel at all means the project root; safePath refuses '.', so the
+      // caller's shorthand is honored directly.
+      const abs = rel ? safePath(rel) : ROOT;
       const entries = [];
       for (const name of fs.readdirSync(abs)) {
         if (FORBIDDEN.has(name)) continue;

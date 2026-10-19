@@ -46,6 +46,10 @@ test('the studio serves the UI and a safe local API', async () => {
     assert.equal(file.status, 200);
     assert.match(file.text, /message/);
 
+    const tree = await api(port, '/api/tree');
+    assert.equal(tree.status, 200, tree.text);
+    assert.match(JSON.stringify(tree.json), /tgcloud/);
+
     const forbidden = await api(port, '/api/file?path=.tgpilot%2Fstate.json');
     assert.equal(forbidden.status, 400);
 
