@@ -111,7 +111,10 @@ export function serverErrorText(err) {
   if (
     err &&
     err.status == null &&
-    (err.name === 'TypeError' || /fetch failed|ENOTFOUND|ECONNREFUSED/i.test(err.cause?.code || err.message || ''))
+    (err.name === 'TypeError' ||
+      /fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|UND_ERR/i.test(
+        err.cause?.code || err.message || ''
+      ))
   ) {
     return (
       `Could not reach the server at ${serverBase()}. ` +

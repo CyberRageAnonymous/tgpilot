@@ -139,6 +139,28 @@ test('the studio serves the UI and a safe local API', async () => {
   }
 });
 
+test('cloud outages answer in human language, not "fetch failed"', async () => {
+  const port = await freePort();
+  const offline = new Project(cloud, null, 'offline');
+  offline.env.TGPILOT_API_URL = 'http://127.0.0.1:9/'; // nothing listens here
+  offline.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  const child = await startStudio(offline, port);
+  try {
+    // linking tolerates an unreachable cloud (saved as unverified)
+    const link = await api(port, '/api/bot', { method: 'POST', body: { token: 'app77:zz' } });
+    assert.equal(link.status, 200, link.text);
+    assert.equal(link.json.token.unverified, true);
+
+    // but a view that must talk to the cloud answers in human language
+    const wh = await api(port, '/api/webhook');
+    assert.equal(wh.status, 500, wh.text);
+    assert.match(wh.json.error, /Could not reach the server at http:\/\/127\.0\.0\.1:9/);
+    assert.doesNotMatch(wh.json.error, /fetch failed/);
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
+
 test('linking a bot from the studio works and bad tokens are rejected', async () => {
   const port = await freePort();
   const child = await startStudio(proj, port);

@@ -21,10 +21,18 @@ const state = {
 // --- fetch helpers -----------------------------------------------------------
 
 async function api(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch {
+    // The studio process itself is unreachable (restarted or closed).
+    const err = new Error('the studio server is not responding — restart tgpilot and reload this page');
+    err.kind = 'server';
+    throw err;
+  }
   let body = null;
   try {
     body = await res.json();

@@ -81,9 +81,11 @@ export function createRoutes(root, uiDir) {
           current_revision: err?.parameters?.current_revision ?? null,
         });
       } else {
+        // Raw undici errors would surface as just "fetch failed" in the
+        // browser; serverErrorText turns outages into a human sentence.
         send(res, err.status || 500, {
           ok: false,
-          error: err.message || 'Request failed',
+          error: serverErrorText(err),
           kind: err.kind || err.type || 'error',
         });
       }
