@@ -112,6 +112,10 @@ export async function main(argv) {
       const { registerUpgrade } = await import('./commands/upgrade.js');
       return registerUpgrade(rest);
     }
+    case 'ping': {
+      const { registerPing } = await import('./commands/ping.js');
+      return registerPing(rest);
+    }
     default: {
       console.error(`"${first}" is not a tgpilot command. Run "tgpilot help" to see the list.`);
       return 1;

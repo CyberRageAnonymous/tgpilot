@@ -155,8 +155,7 @@ test('cloud outages answer in human language, not "fetch failed"', async () => {
     const wh = await api(port, '/api/webhook');
     assert.equal(wh.status, 500, wh.text);
     assert.match(wh.json.error, /Could not reach the server at http:\/\/127\.0\.0\.1:9/);
-    assert.doesNotMatch(wh.json.error, /fetch failed/);
-  } finally {
+    assert.doesNotMatch(wh.json.error, /fetch failed/);  } finally {
     child.kill('SIGTERM');
   }
 });

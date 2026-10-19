@@ -1,8 +1,34 @@
 const PROD_URL = 'https://cloud.telegram.org';
+import { tunnelRequest, hasProxy } from './tunnel.js';
 
 function apiBase() {
   const override = process.env.TGPILOT_API_URL || process.env.TG_CLOUD_API_URL;
   return (override || PROD_URL).replace(/\/+$/, '');
+}
+
+// Every cloud round-trip has to finish inside this window, direct or
+// proxied — a hanging connection must fail fast with a clear message
+// instead of freezing the CLI or studio for minutes.
+function requestTimeout() {
+  return Number(process.env.TGPILOT_TIMEOUT) || 20000;
+}
+
+// Runs a single cloud request, straight or through the configured proxy.
+async function doRequest({ method, url, headers, body }) {
+  if (hasProxy()) {
+    return tunnelRequest({
+      method,
+      url,
+      headers: Object.fromEntries(Object.entries(headers).filter(([k]) => k.toLowerCase() !== 'content-length')),
+      body: body === undefined ? Buffer.alloc(0) : Buffer.isBuffer(body) ? body : Buffer.from(body),
+    });
+  }
+  return fetch(url, {
+    method,
+    headers,
+    body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : Buffer.from(body),
+    signal: AbortSignal.timeout(requestTimeout()),
+  });
 }
 
 export function serverBase() {
@@ -33,8 +59,9 @@ export async function request(method, path, token, body) {
     }
   }
 
-  const res = await fetch(url, {
+  const res = await doRequest({
     method,
+    url,
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -59,7 +86,7 @@ export async function requestBytes(method, path, token, bytes) {
     console.error(`[debug]   body: <${bytes.length} bytes>`);
   }
 
-  const res = await fetch(url, { method, headers, body: bytes });
+  const res = await doRequest({ method, url, headers, body: bytes });
   return parseEnvelope(res);
 }
 
@@ -68,8 +95,12 @@ export async function requestPublic(method, path) {
   if (isDebug()) {
     console.error(`\n[debug] → ${method} ${url} (public)`);
   }
-  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' } });
+  const res = await doRequest({ method, url, headers: { 'Content-Type': 'application/json' } });
   return parseEnvelope(res);
+}
+
+function proxyEnvName() {
+  return process.env.TGPILOT_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.ALL_PROXY || process.env.all_proxy || '';
 }
 
 async function parseEnvelope(res) {
@@ -108,18 +139,29 @@ async function parseEnvelope(res) {
 
 // One-line, user-facing description of a server error.
 export function serverErrorText(err) {
-  if (
-    err &&
-    err.status == null &&
-    (err.name === 'TypeError' ||
-      /fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|UND_ERR/i.test(
-        err.cause?.code || err.message || ''
-      ))
-  ) {
-    return (
-      `Could not reach the server at ${serverBase()}. ` +
-      'Check your connection (or the TGPILOT_API_URL setting).'
-    );
+  if (err && err.status == null) {
+    const cause = err.cause?.code || err.cause?.name || '';
+    const where = err.message || '';
+    const timed =
+      err.name === 'AbortError' ||
+      err.name === 'TimeoutError' ||
+      /timed out/i.test(where) ||
+      /TIMEOUT/i.test(String(cause));
+    const deadish =
+      err.name === 'TypeError' ||
+      /fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET|EPROTO|EAI_AGAIN|certificate|proxy/i.test(`${cause} ${where}`);
+
+    if (timed || deadish) {
+      const base = serverBase();
+      let text = timed
+        ? `The connection to ${base} timed out after ${Math.round(requestTimeout() / 1000)} s.`
+        : `Could not reach the server at ${base}. Check your connection (or the TGPILOT_API_URL setting).`;
+      const proxy = proxyEnvName();
+      text += proxy
+        ? ` The configured proxy ${proxy} also failed — is that proxy app running? Diagnose: tgpilot ping`
+        : ' If telegram.org is blocked on your network (common behind filters), set TGPILOT_PROXY=http://host:port — e.g. the local port of your VPN/proxy app — and try again. Diagnose: tgpilot ping';
+      return text;
+    }
   }
 
   let msg = err?.description || err?.message || 'Server error.';
