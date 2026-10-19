@@ -1,0 +1,34 @@
+{
+  "name": "tgpilot",
+  "version": "0.1.0",
+  "description": "Studio and command-line companion for Telegram Serverless bots: write handlers, run them, watch logs and deploy to your bot.",
+  "type": "module",
+  "bin": {
+    "tgpilot": "bin/tgpilot.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/unit/*.test.js\" \"test/e2e/*.test.js\"",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "test:e2e": "node --test \"test/e2e/*.test.js\""
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin",
+    "src",
+    "webui",
+    "LICENSE",
+    "README.md"
+  ],
+  "keywords": [
+    "telegram",
+    "telegram-bot",
+    "serverless",
+    "tgcloud",
+    "bot",
+    "deploy",
+    "cli"
+  ],
+  "license": "MIT"
+}

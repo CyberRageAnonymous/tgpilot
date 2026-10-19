@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tgpilot studio</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">tgpilot <span class="brand-sub">studio</span></div>
+  <div class="topbar-mid">
+    <button id="btn-status" class="ghost" title="Compare the folder with the bot">Status</button>
+    <button id="btn-fetch" class="ghost" title="Refresh the local snapshot from the bot">Fetch</button>
+  </div>
+  <div class="bot-state">
+    <span id="bot-token" class="token-chip">not linked</span>
+    <button id="btn-link" class="ghost small">Link bot…</button>
+    <button id="btn-unlink" class="ghost small" hidden>Unlink</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- File tree -->
+  <section class="panel panel-tree">
+    <div class="panel-head">
+      <h2>Files</h2>
+      <div class="icon-row">
+        <button id="btn-new-module" class="ghost small" title="Scaffold a new module file">+ module</button>
+        <button id="btn-new-file" class="ghost small" title="Create a plain text file">+ file</button>
+      </div>
+    </div>
+    <div id="tree" class="tree" tabindex="0"></div>
+  </section>
+
+  <!-- Editor + run -->
+  <section class="panel panel-editor">
+    <div class="panel-head editor-head">
+      <span id="editor-path" class="editor-path">no file open</span>
+      <span id="editor-dirty" class="dirty-dot" hidden>●</span>
+      <div class="icon-row">
+        <button id="btn-save" class="primary small" disabled>Save</button>
+        <button id="btn-delete" class="ghost small" disabled>Delete</button>
+      </div>
+    </div>
+    <textarea id="editor" spellcheck="false" disabled></textarea>
+    <div class="runbox">
+      <div class="panel-head run-head">
+        <h2>Run in the cloud</h2>
+        <div class="icon-row">
+          <select id="run-module" class="select"></select>
+          <button id="btn-run" class="primary small">Run</button>
+        </div>
+      </div>
+      <textarea id="run-args" class="args" placeholder="{ text: 'hi' }" spellcheck="false"></textarea>
+      <pre id="run-out" class="run-out" hidden></pre>
+    </div>
+  </section>
+
+  <!-- Bot state column -->
+  <section class="side">
+    <div class="panel">
+      <div class="panel-head"><h2>Deploy</h2></div>
+      <div id="status-box" class="status-box"></div>
+      <div class="stack">
+        <button id="btn-push" class="primary">Review changes…</button>
+        <div class="hint">push deploys changed modules and the Mini App build</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Migrations</h2>
+        <button id="btn-migrate-check" class="ghost small">Check</button>
+      </div>
+      <div id="migrate-box" class="status-box"><div class="hint">compare schema.js against the database</div></div>
+      <div class="stack" id="migrate-actions" hidden>
+        <button id="btn-migrate-apply" class="primary small">Apply selected</button>
+        <button id="btn-migrate-recheck" class="ghost small">Re-check</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Webhook</h2>
+        <button id="btn-webhook-sync" class="ghost small">Sync</button>
+      </div>
+      <div id="webhook-box" class="status-box"><div class="hint">show the bot's webhook state</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Journal</h2>
+        <div class="icon-row">
+          <select id="logs-level" class="select">
+            <option value="info">info+</option>
+            <option value="warn">warn+</option>
+            <option value="error">errors</option>
+          </select>
+          <button id="btn-logs-clear" class="ghost small">Clear</button>
+        </div>
+      </div>
+      <div id="logs-box" class="log-list"></div>
+    </div>
+  </section>
+</main>
+
+<!-- Dialogs -->
+<dialog id="dialog-push" class="dialog">
+  <div class="dialog-head"><h3>Review deploy</h3><button class="ghost small" data-close>×</button></div>
+  <div id="push-list" class="push-list"></div>
+  <label id="push-confirm-row" class="confirm-row" hidden>
+    <input type="checkbox" id="push-confirm">
+    <span>Yes, delete the marked modules on the bot.</span>
+  </label>
+  <div class="dialog-actions">
+    <button class="ghost" data-close>Cancel</button>
+    <button id="btn-push-confirm" class="primary">Deploy</button>
+  </div>
+</dialog>
+
+<dialog id="dialog-link" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3>Link a bot</h3><button class="ghost small" data-close>×</button></div>
+  <div class="hint">
+    In @BotFather: your bot → Serverless → CLI Access → Access token.
+    The token is stored on this machine only (<code>.tgpilot/credentials</code>) and
+    stays behind the local server — the browser never sees it.
+  </div>
+  <input id="link-token" class="text-input" placeholder="app&lt;id&gt;:&lt;secret&gt;" autocomplete="off" spellcheck="false">
+  <div class="dialog-actions">
+    <button class="ghost" data-close>Cancel</button>
+    <button id="btn-link-save" class="primary">Link</button>
+  </div>
+</dialog>
+
+<dialog id="dialog-new-module" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3>New module</h3><button class="ghost small" data-close>×</button></div>
+  <div class="hint">A module path relative to <code>tgcloud/</code>, without .js — e.g. <code>handlers/inline_mode</code> or <code>lib/pagination</code>.</div>
+  <input id="new-module-path" class="text-input" placeholder="handlers/name" spellcheck="false">
+  <div class="dialog-actions">
+    <button class="ghost" data-close>Cancel</button>
+    <button id="btn-new-module-save" class="primary">Create</button>
+  </div>
+</dialog>
+
+<dialog id="dialog-new-file" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3>New file</h3><button class="ghost small" data-close>×</button></div>
+  <div class="hint">Any file inside the project — e.g. <code>README.md</code> or <code>tgcloud.jsonc</code>.</div>
+  <input id="new-file-path" class="text-input" placeholder="README.md" spellcheck="false">
+  <div class="dialog-actions">
+    <button class="ghost" data-close>Cancel</button>
+    <button id="btn-new-file-save" class="primary">Create</button>
+  </div>
+</dialog>
+
+<dialog id="dialog-error" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3>Was not possible</h3><button class="ghost small" data-close>×</button></div>
+  <div id="dialog-error-msg" class="error-msg"></div>
+  <div class="dialog-actions"><button class="ghost" data-close>Close</button></div>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>
