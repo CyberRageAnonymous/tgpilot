@@ -326,12 +326,35 @@ async function openFolder(rel) {
     const path = rel ? `${rel}/${entry.name}` : entry.name;
     const row = document.createElement('button');
     row.className = `file-row ${entry.dir ? 'is-dir' : ''}`;
+
+    const icon = document.createElement('span');
+    icon.className = 'file-ico';
+    icon.innerHTML = entry.dir
+      ? '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2.5h9v8.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M14 3.5V8h4.5"/></svg>';
+    row.appendChild(icon);
+
     if (entry.dir) {
-      row.innerHTML = `<span class="file-name dir">${escapeHtml(entry.name)}/</span><span class="chev">›</span>`;
+      const name = document.createElement('span');
+      name.className = 'file-name dir';
+      name.textContent = `${entry.name}/`;
+      row.appendChild(name);
+      const chev = document.createElement('span');
+      chev.className = 'chev';
+      chev.textContent = '›';
+      row.appendChild(chev);
       row.onclick = () => openFolder(path).catch(showError);
     } else {
-      row.innerHTML = `<span class="file-name">${escapeHtml(entry.name)}</span>` +
-        (entry.size != null ? `<span class="file-sub">${formatSize(entry.size)}</span>` : '');
+      const name = document.createElement('span');
+      name.className = 'file-name';
+      name.textContent = entry.name;
+      row.appendChild(name);
+      if (entry.size != null) {
+        const size = document.createElement('span');
+        size.className = 'file-sub';
+        size.textContent = formatSize(entry.size);
+        row.appendChild(size);
+      }
       row.onclick = () => openPath(path).catch(showError);
     }
     host.appendChild(row);

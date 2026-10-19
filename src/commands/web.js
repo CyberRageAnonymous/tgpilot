@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { parseArgs } from '../args.js';
 import { fatal, info } from '../output.js';
 import { findProjectRoot } from '../project/root.js';
+import { MODULE_ROOT } from '../project/layout.js';
 import { createRoutes } from '../web/routes.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -13,7 +14,13 @@ const DEFAULT_PORT = 5177;
 
 export async function registerWeb(argv) {
   const args = parseArgs(argv, { values: ['port', 'host'] });
+
+  // The studio browses the project folder, so it refuses to serve anything else:
+  // a stray .tgpilot higher up would otherwise pose as the project.
   const root = findProjectRoot();
+  if (!root || !fs.existsSync(path.join(root, MODULE_ROOT))) {
+    fatal('No project folder found. cd into one (e.g. "cd mybot") or run "tgpilot init" first.');
+  }
 
   const port = args.values.port ? Number(args.values.port) : Number(process.env.TGPILOT_WEB_PORT) || DEFAULT_PORT;
   const host = String(process.env.TGPILOT_WEB_HOST || args.values.host || '127.0.0.1');

@@ -110,3 +110,10 @@ test('linking a bot from the studio works and bad tokens are rejected', async ()
     child.kill('SIGTERM');
   }
 });
+
+test('web refuses to serve anything that is not a project', async () => {
+  const bare = new Project(cloud, null, 'bare');
+  const r = await bare.cli(['web']);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /No project folder found/);
+});

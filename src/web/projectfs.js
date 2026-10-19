@@ -39,8 +39,17 @@ export function createProjectFs(root) {
       // No rel at all means the project root; safePath refuses '.', so the
       // caller's shorthand is honored directly.
       const abs = rel ? safePath(rel) : ROOT;
+      let names;
+      try {
+        names = fs.readdirSync(abs);
+      } catch (err) {
+        // A folder may simply not exist yet (a fresh simulator/lib/); the
+        // studio shows it as empty instead of an error.
+        if (err?.code === 'ENOENT') return [];
+        throw err;
+      }
       const entries = [];
-      for (const name of fs.readdirSync(abs)) {
+      for (const name of names) {
         if (FORBIDDEN.has(name)) continue;
         let st;
         try {
