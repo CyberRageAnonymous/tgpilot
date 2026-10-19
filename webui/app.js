@@ -245,24 +245,46 @@ function updateHomeSubs() {
   const s = state.lastStatus;
 
   let deploy = linked ? 'open for status, deploy and webhook' : 'link a bot first';
+  let deployChip = '';
   if (linked && s) {
     const n = (s.added || []).length + (s.modified || []).length + (s.deleted || []).length
       + (s.static && s.static.changed ? 1 : 0);
     deploy = n === 0 ? 'everything is deployed' : `${n} change${n === 1 ? '' : 's'} waiting to deploy`;
+    deployChip = n === 0 ? '✓' : String(n);
   }
   $('sub-deploy').textContent = deploy;
+  setChip('cnt-deploy', deployChip, !deployChip);
 
-  $('sub-handlers').textContent = `${plural(countFilesIn('tgcloud/handlers'))} in tgcloud/handlers`;
-  $('sub-endpoints').textContent = `${plural(countFilesIn('tgcloud/endpoints'))} in tgcloud/endpoints`;
-  $('sub-library').textContent = `${plural(countFilesIn('tgcloud/lib'))} in tgcloud/lib`;
+  const h = countFilesIn('tgcloud/handlers');
+  $('sub-handlers').textContent = `${plural(h)} in tgcloud/handlers`;
+  setChip('cnt-handlers', state.handlerTypes.length ? `${Math.min(h, state.handlerTypes.length)}/${state.handlerTypes.length}` : '', !h);
 
-  $('sub-database').textContent = countFilesIn('tgcloud/schema.js') ? 'schema.js — tables and columns live here' : 'no schema.js yet';
+  const e = countFilesIn('tgcloud/endpoints');
+  $('sub-endpoints').textContent = `${plural(e)} in tgcloud/endpoints`;
+  setChip('cnt-endpoints', e ? String(e) : '', !e);
+
+  const l = countFilesIn('tgcloud/lib');
+  $('sub-library').textContent = `${plural(l)} in tgcloud/lib`;
+  setChip('cnt-library', l ? String(l) : '', !l);
+
+  const db = countFilesIn('tgcloud/schema.js');
+  $('sub-database').textContent = db ? 'schema.js — tables and columns live here' : 'no schema.js yet';
+  setChip('cnt-database', db ? String(db) : '—', !db);
 
   const mini = state.staticSource;
   $('sub-miniapp').textContent = mini ? `the build in ${mini}/` : 'not configured — set the static block in tgcloud.jsonc';
-  if (mini) countFilesIn(mini);
+  const mf = mini ? countFilesIn(mini) : 0;
+  setChip('cnt-miniapp', mf ? String(mf) : (mini ? '' : '—'), !mf);
 
   $('sub-other').textContent = `${plural(countFilesIn(''))} in the project folder`;
+  setChip('cnt-other', String(countFilesIn('')), false);
+}
+
+function setChip(id, text) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('on', Boolean(text && text !== '—'));
 }
 
 function plural(n) {
@@ -279,6 +301,29 @@ async function loadTree() {
   updateHomeSubs();
 }
 
+// Whether tgcloud/schema.js exists decides what the Database row does: edit it,
+// or scaffold the same starter the CLI's init writes.
+async function initDatabaseView() {
+  const out = await GET('/api/list?path=tgcloud');
+  const has = out.entries.some((e) => e.name === 'schema.js' && !e.dir);
+  const row = $('row-schema');
+  row.onclick = has
+    ? () => openPath('tgcloud/schema.js').catch(showError)
+    : () => createSchema().catch(showError);
+  row.querySelector('.file-name').textContent = 'tgcloud/schema.js';
+  row.querySelector('.file-sub').textContent = has
+    ? 'edit the tables'
+    : 'not created yet — one tap builds the starter';
+}
+
+async function createSchema() {
+  const starter = await GET('/api/starter?kind=schema');
+  await POST('/api/file', { path: 'tgcloud/schema.js', content: starter.content });
+  toast('tgcloud/schema.js created');
+  await loadTree().catch(() => {});
+  await openPath('tgcloud/schema.js');
+}
+
 // --- sections ----------------------------------------------------------------
 
 async function openSection(key) {
@@ -289,6 +334,7 @@ async function openSection(key) {
   }
   if (key === 'database') {
     show('database');
+    initDatabaseView().catch(showError);
     migrateCheck().catch(showError);
     return;
   }
@@ -685,6 +731,12 @@ async function pushPreview() {
 async function pushConfirm() {
   const out = await POST('/api/push', { confirm: true });
   $('dialog-push').close();
+  if (out.nothing) {
+    toast('nothing to deploy — the folder matches the bot');
+    await refreshStatus().catch(() => {});
+    updateHomeSubs();
+    return;
+  }
   const bits = [];
   if (out.revision != null) bits.push(`deployed · revision ${out.revision}`);
   if (out.uploaded) bits.push(`+ ${out.uploaded.count} static file(s) (${out.uploaded.size})`);

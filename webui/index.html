@@ -34,67 +34,39 @@
     </div>
 
     <div class="section-list">
-      <button class="section-row" data-open="deploy">
-        <span class="section-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="13" rx="2.5"/><path d="M7 9.5l-2.6 2 2.6 2M12.6 9.5l2.6 2-2.6 2M10.4 15l2.6-5"/></svg></span>
-        <span class="section-text">
-          <span class="section-title">Deploy &amp; status</span>
-          <span class="section-sub" id="sub-deploy">link a bot first</span>
-        </span>
-        <span class="chev">›</span>
+      <button class="section-row" 
+        <span class="count" id="cnt-deploy"></span>
+›</span>
       </button>
 
-      <button class="section-row" data-open="handlers">
-        <span class="section-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 6 13h5l-1.5 9L18 10h-5l1.6-8z"/></svg></span>
-        <span class="section-text">
-          <span class="section-title">Handlers</span>
-          <span class="section-sub" id="sub-handlers">functions that react to Telegram update types</span>
-        </span>
-        <span class="chev">›</span>
+      <button class="section-row" 
+        <span class="count" id="cnt-handlers"></span>
+›</span>
       </button>
 
-      <button class="section-row" data-open="endpoints">
-        <span class="section-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/><path d="M6.7 12h3.6M13.7 12h3.6"/></svg></span>
-        <span class="section-text">
-          <span class="section-title">Endpoints</span>
-          <span class="section-sub" id="sub-endpoints">functions your Mini App can call</span>
-        </span>
-        <span class="chev">›</span>
+      <button class="section-row" 
+        <span class="count" id="cnt-endpoints"></span>
+›</span>
       </button>
 
-      <button class="section-row" data-open="library">
-        <span class="section-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5c-2 0-2.4 1.4-2.4 2.6v2.2C6.6 11.2 5.7 12 4.4 12c1.3 0 2.2.8 2.2 2.2v2.2C6.6 17.6 7 19 9 19M15 5c2 0 2.4 1.4 2.4 2.6v2.2c0 1.4.9 2.2 2.2 2.2-1.3 0-2.2.8-2.2 2.2v2.2C17.4 17.6 17 19 15 19"/></svg></span>
-        <span class="section-text">
-          <span class="section-title">Library</span>
-          <span class="section-sub" id="sub-library">shared modules imported by your code</span>
-        </span>
-        <span class="chev">›</span>
+      <button class="section-row" 
+        <span class="count" id="cnt-library"></span>
+›</span>
       </button>
 
-      <button class="section-row" data-open="database">
-        <span class="section-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg></span>
-        <span class="section-text">
-          <span class="section-title">Database</span>
-          <span class="section-sub" id="sub-database">define your tables and columns in code</span>
-        </span>
-        <span class="chev">›</span>
+      <button class="section-row" 
+        <span class="count" id="cnt-database"></span>
+›</span>
       </button>
 
-      <button class="section-row" data-open="miniapp">
-        <span class="section-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2.5h9v8.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/><path d="M13.2 12.6l-2 2 2 2M17 12.6l-2 2 2 2"/></svg></span>
-        <span class="section-text">
-          <span class="section-title">Mini App Files</span>
-          <span class="section-sub" id="sub-miniapp">the front-end your users open in Telegram</span>
-        </span>
-        <span class="chev">›</span>
+      <button class="section-row" 
+        <span class="count" id="cnt-miniapp"></span>
+›</span>
       </button>
 
-      <button class="section-row" data-open="other">
-        <span class="section-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M14 3.5V8h4.5"/></svg></span>
-        <span class="section-text">
-          <span class="section-title">Other files</span>
-          <span class="section-sub" id="sub-other">README, config and anything else in the folder</span>
-        </span>
-        <span class="chev">›</span>
+      <button class="section-row" 
+        <span class="count" id="cnt-other"></span>
+›</span>
       </button>
     </div>
 

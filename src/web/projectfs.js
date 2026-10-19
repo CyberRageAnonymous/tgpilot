@@ -11,7 +11,7 @@ const MAX_WRITE = 4 * 1024 * 1024;
 export function createProjectFs(root) {
   const ROOT = path.resolve(root);
 
-  const deny = (message) => { const err = new Error(message); err.status = 400; return err; };
+  const deny = (message, kind) => { const err = new Error(message); err.status = 400; err.kind = kind || 'bad-request'; return err; };
 
   const safePath = (rel) => {
     const posix = String(rel || '').split(/[\\/]/).join('/');
@@ -30,7 +30,13 @@ export function createProjectFs(root) {
     root: ROOT,
     read(rel) {
       const abs = safePath(rel);
-      const st = fs.statSync(abs);
+      let st;
+      try {
+        st = fs.statSync(abs);
+      } catch (err) {
+        if (err?.code === 'ENOENT') throw deny('File not found — it may have been deleted', 'not-found');
+        throw err;
+      }
       if (st.isDirectory()) throw deny('That is a folder');
       if (st.size > MAX_READ) throw deny('File too large for the studio (>2 MB)');
       return fs.readFileSync(abs, 'utf-8');
@@ -77,7 +83,14 @@ export function createProjectFs(root) {
     },
     remove(rel) {
       const abs = safePath(rel);
-      const st = fs.statSync(abs);
+      let st;
+      try {
+        st = fs.statSync(abs);
+      } catch (err) {
+        // Deleting something that is already gone counts as deleted.
+        if (err?.code === 'ENOENT') return;
+        throw err;
+      }
       if (st.isDirectory()) {
         fs.rmdirSync(abs); // empty folders only; refused when not empty
         return;

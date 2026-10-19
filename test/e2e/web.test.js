@@ -62,6 +62,8 @@ test('the studio serves the UI and a safe local API', async () => {
 
     const info = await api(port, '/api/project');
     assert.equal(info.status, 200, info.text);
+    assert.ok(Array.isArray(info.json.runnable));
+    assert.deepEqual(info.json.runnable, ['handlers', 'endpoints']);
     assert.deepEqual(info.json.static, { source: 'dist', spa: true });
     assert.ok(info.json.handlerTypes.length >= 20);
     assert.ok(info.json.handlerTypes.some((t) => t.type === 'callback_query'));
@@ -69,12 +71,19 @@ test('the studio serves the UI and a safe local API', async () => {
     const starter = await api(port, '/api/starter?kind=handlers&name=callback_query');
     assert.equal(starter.status, 200, starter.text);
     assert.match(starter.json.content, /callback_query, ctx/);
+    const schemaStarter = await api(port, '/api/starter?kind=schema');
+    assert.equal(schemaStarter.status, 200);
+    assert.match(schemaStarter.json.content, /sdk\/db/);
     const badStarter = await api(port, '/api/starter?kind=handlers&name=..\%2Fevil');
     assert.equal(badStarter.status, 400);
 
     const missing = await api(port, '/api/list?path=tgcloud%2Flib');
     assert.equal(missing.status, 200);
     assert.deepEqual(missing.json.entries, []);
+
+    const goneFile = await api(port, '/api/file?path=tgcloud%2Flib%2Fnope.js');
+    assert.equal(goneFile.status, 400);
+    assert.match(goneFile.json.error, /File not found/);
 
     const forbidden = await api(port, '/api/file?path=.tgpilot%2Fstate.json');
     assert.equal(forbidden.status, 400);
@@ -96,6 +105,28 @@ test('the studio serves the UI and a safe local API', async () => {
 
     const pushed = await api(port, '/api/push', { method: 'POST', body: {} });
     assert.equal(pushed.status, 200, pushed.text);
+    assert.ok(pushed.json.changedCount > 0);
+
+    const deployed = await api(port, '/api/push', { method: 'POST', body: { confirm: true } });
+    assert.equal(deployed.status, 200, deployed.text);
+    assert.equal(deployed.json.revision, 1);
+    assert.equal(deployed.json.uploaded.count, 1);
+    assert.match(deployed.json.staticUrl, /https:\/\/cdn\.mock\//);
+
+    // A later push from the studio reports it is all done.
+    const twice = await api(port, '/api/push', { method: 'POST', body: { confirm: true } });
+    assert.equal(twice.status, 200, twice.text);
+    assert.equal(twice.json.nothing, true);
+
+    // Deleting a module through the studio lands with the same confirm gate.
+    await api(port, '/api/file', { method: 'POST', body: { path: 'tgcloud/handlers/extra.js', content: 'export default async function (chat_member, ctx) {}\n' } });
+    assert.equal((await api(port, '/api/push', { method: 'POST', body: { confirm: true } })).json.revision, 2);
+    await api(port, '/api/file', { method: 'DELETE', body: { path: 'tgcloud/handlers/extra.js' } });
+    const delPreview = await api(port, '/api/push', { method: 'POST', body: {} });
+    assert.ok(delPreview.json.deleted.includes('tgcloud/handlers/extra.js'), delPreview.text);
+    assert.equal(delPreview.json.deletionsRequireConfirm, true);
+    const delPush = await api(port, '/api/push', { method: 'POST', body: { confirm: true } });
+    assert.equal(delPush.json.revision, 3, delPush.text);
 
     const webhook = await api(port, '/api/webhook');
     assert.equal(webhook.status, 200);

@@ -15,7 +15,7 @@ import { readDisk, writeDisk, unlinkDisk, existsDisk, displayPath } from '../pro
 import { changeCard, changeId } from '../project/changes.js';
 import { serverErrorText } from '../api/client.js';
 import { log, readLogs, clearLogs, LEVELS } from '../logs.js';
-import { moduleStarter, UPDATE_TYPES } from '../templates.js';
+import { moduleStarter, UPDATE_TYPES, SCHEMA_STARTER } from '../templates.js';
 import { parse } from '../json5.js';
 import { computeDiff } from '../diff.js';
 import { resolveRunnablePath } from '../commands/run.js';
@@ -181,7 +181,7 @@ async function handleProjectInfo(project) {
     root: project.root,
     token: peekToken() ? { masked: maskToken(peekToken()), fromEnv: Boolean(tokenEnvName()) } : null,
     dirs: moduleDirs(),
-    runnable: runnableDirs(),
+    runnable: [...runnableDirs()],
     scaffold: scaffoldEntries(),
     configFileName: configFileName(),
     schemaVersion: descriptor?.project_schema_version ?? null,
@@ -216,6 +216,7 @@ function handleStarter(query) {
   // The studio creates modules from the same starters the CLI scaffolds.
   const kind = query?.get('kind');
   const name = query?.get('name') || '';
+  if (kind === 'schema') return { ok: true, content: SCHEMA_STARTER };
   if (!['handlers', 'endpoints', 'lib'].includes(kind)) throw badRequest('Unknown module kind');
   if (!/^[A-Za-z0-9_]+$/.test(name)) throw badRequest('Bad module name');
   return { ok: true, content: moduleStarter(kind, name) };
@@ -350,6 +351,8 @@ async function handlePush(body) {
   }
 
   const started = Date.now();
+  if (!plan.changedCount) return { ok: true, nothing: true };
+
   const settled = await settleRevision(plan, {
     force: body?.force === true,
     token,
@@ -429,7 +432,7 @@ async function handleRun(body) {
       throw badRequest(`"${body.module}" matches ${e.candidates.map(displayPath).join(' and ')} — name the folder, e.g. "${e.candidates[0]}".`);
     }
     if (e.kind === 'not-runnable') {
-      throw badRequest(`${displayPath(e.path)} is not runnable. Only modules in ${runnable.map((d) => `${d}/`).join(' and ')} can be run.`);
+      throw badRequest(`${displayPath(e.path)} is not runnable. Only modules in ${[...runnable].map((d) => `${d}/`).join(' and ')} can be run.`);
     }
     throw badRequest('Module not found. Pick one from handlers/ or endpoints/.');
   }
