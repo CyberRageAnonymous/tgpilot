@@ -31,6 +31,7 @@ export function createRoutes(root, uiDir) {
   const routes = new Map([
     ['GET /api/project', () => handleProjectInfo(project)],
     ['GET /api/tree', () => handleTree(project)],
+    ['GET /api/list', (body, query) => handleList(project, query)],
     ['GET /api/file', (body, query) => handleFileRead(project, query)],
     ['POST /api/file', (body) => handleFileWrite(project, body)],
     ['DELETE /api/file', (body) => handleFileDelete(project, body)],
@@ -171,6 +172,8 @@ function badRequest(message, kind) {
 
 async function handleProjectInfo(project) {
   const descriptor = await syncCapabilities();
+  let staticBlock = null;
+  try { staticBlock = loadProjectConfig({ tolerant: true }).static || null; } catch { staticBlock = null; }
   return {
     ok: true,
     root: project.root,
@@ -180,6 +183,9 @@ async function handleProjectInfo(project) {
     scaffold: scaffoldEntries(),
     configFileName: configFileName(),
     schemaVersion: descriptor?.project_schema_version ?? null,
+    static: staticBlock && !staticBlock.remove
+      ? { source: staticBlock.source, spa: staticBlock.config?.spa === true }
+      : null,
   };
 }
 
@@ -195,6 +201,12 @@ function handleTree(project) {
         : { ...entry, path: full };
     });
   return { ok: true, tree: walk('', 0) };
+}
+
+function handleList(project, query) {
+  // One flat folder listing for the studio's section views; '' is the root.
+  const rel = query?.get('path') || '';
+  return { ok: true, path: rel, entries: project.list(rel) };
 }
 
 function handleFileRead(project, query) {

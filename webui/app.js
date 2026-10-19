@@ -1,12 +1,20 @@
-// Studio front-end. Plain dependency-free JS: fetch the API, draw the panels.
+// Studio front-end. Plain dependency-free JS: fetch the API, draw the views.
 
 const $ = (id) => document.getElementById(id);
 
 const state = {
+  view: 'home',
+  section: null,
+  folderPath: '',
   tree: [],
+  staticSource: null,
   openPath: null,
   dirty: false,
   migrationIds: [],
+  lastStatus: null,
+  runnable: ['handlers', 'endpoints'],
+  fromView: null,
+  editorModule: null,
 };
 
 // --- fetch helpers -----------------------------------------------------------
@@ -48,11 +56,74 @@ function toast(text) {
   setTimeout(() => el.remove(), 3200);
 }
 
+// --- views -------------------------------------------------------------------
+
+const SECTION_TITLES = {
+  home: 'tgpilot studio',
+  deploy: 'Deploy & status',
+  files: 'Files',
+  editor: 'Editor',
+  database: 'Database',
+};
+
+// The folder each section browses; the cloud module folders live under tgcloud/.
+const SECTIONS = {
+  handlers: { dir: 'tgcloud/handlers', kind: 'module' },
+  endpoints: { dir: 'tgcloud/endpoints', kind: 'module' },
+  library: { dir: 'tgcloud/lib', kind: 'module' },
+  miniapp: { dir: 'dist', kind: 'file' },
+  other: { dir: '', kind: 'file' },
+};
+
+function show(view, section) {
+  state.view = view;
+  state.section = section || null;
+  for (const el of document.querySelectorAll('.view')) {
+    el.hidden = el.id !== `view-${view}`;
+  }
+  $('btn-back').hidden = view === 'home';
+  $('top-title').textContent = state.section
+    ? sectionTitle(state.section)
+    : (SECTION_TITLES[view] || 'tgpilot studio');
+  window.scrollTo(0, 0);
+}
+
+function sectionTitle(key) {
+  return ({
+    handlers: 'Handlers',
+    endpoints: 'Endpoints',
+    library: 'Library',
+    miniapp: 'Mini App Files',
+    other: 'Other files',
+  })[key] || SECTION_TITLES.files;
+}
+
+function goBack() {
+  if (state.view === 'editor') {
+    if (state.section) openSection(state.section);
+    else if (state.fromView === 'database') show('database');
+    else show('home');
+    return;
+  }
+  show('home');
+  updateHomeSubs();
+}
+
+// Where to land after closing or deleting the open file.
+function returnToSection() {
+  if (state.section) { openSection(state.section).catch(showError); return; }
+  if (state.fromView === 'database') show('database');
+  else show('home');
+}
+
 // --- boot --------------------------------------------------------------------
 
 function wire() {
-  $('btn-fetch').onclick = () => doFetch().catch(showError);
-  $('btn-status').onclick = () => refreshStatus().catch(showError);
+  $('btn-back').onclick = goBack;
+
+  for (const row of document.querySelectorAll('.section-row')) {
+    row.onclick = () => openSection(row.dataset.open).catch(showError);
+  }
 
   $('btn-link').onclick = () => $('dialog-link').showModal();
   $('btn-link-save').onclick = () => linkBot().catch(showError);
@@ -60,16 +131,30 @@ function wire() {
 
   $('btn-save').onclick = () => saveOpen().catch(showError);
   $('btn-delete').onclick = () => deleteOpen().catch(showError);
+  $('btn-run-editor').onclick = () => promptRun(state.editorModule).catch(showError);
+  $('btn-run').onclick = () => runCurrent().catch(showError);
 
-  $('btn-new-module').onclick = () => { $('dialog-new-module').showModal(); $('new-module-path').focus(); };
+  $('btn-new-module').onclick = () => {
+    const s = SECTIONS[state.section];
+    $('new-module-path').value = s && state.section !== 'other' ? s.dir.replace(/^tgcloud\//, '') + '/' : '';
+    $('dialog-new-module').showModal();
+    $('new-module-path').focus();
+  };
   $('btn-new-module-save').onclick = () => createModule().catch(showError);
-  $('btn-new-file').onclick = () => { $('dialog-new-file').showModal(); $('new-file-path').focus(); };
+  $('btn-new-file').onclick = () => {
+    $('new-file-path').value = state.section === 'miniapp' && state.folderPath ? `${state.folderPath}/` : '';
+    $('dialog-new-file').showModal();
+    $('new-file-path').focus();
+  };
   $('btn-new-file-save').onclick = () => createFile().catch(showError);
+
+  $('row-schema').onclick = () => openPath('tgcloud/schema.js').catch(showError);
 
   $('btn-push').onclick = () => pushPreview().catch(showError);
   $('btn-push-confirm').onclick = () => pushConfirm().catch(showError);
+  $('btn-fetch').onclick = () => doFetch().catch(showError);
+  $('btn-status').onclick = () => refreshStatus().catch(showError);
 
-  $('btn-run').onclick = () => runModule().catch(showError);
   $('btn-migrate-check').onclick = () => migrateCheck().catch(showError);
   $('btn-migrate-recheck').onclick = () => migrateCheck().catch(showError);
   $('btn-migrate-apply').onclick = () => migrateApply().catch(showError);
@@ -103,6 +188,7 @@ async function start() {
   });
   await refreshStatus().catch(showError);
   loadLogs().catch(() => {});
+  updateHomeSubs();
 }
 
 // --- project / bot link ------------------------------------------------------
@@ -110,11 +196,13 @@ async function start() {
 async function refreshProject() {
   const info = await GET('/api/project');
   state.runnable = info.runnable || ['handlers', 'endpoints'];
+  state.staticSource = info.static ? info.static.source : null;
   const token = info.token;
   $('bot-token').textContent = token ? `bot ${token.masked}` : 'not linked';
   $('bot-token').classList.toggle('linked', Boolean(token));
   $('btn-unlink').hidden = !token;
   $('btn-link').hidden = Boolean(token);
+  $('hero-bot').textContent = token ? `bot ${token.masked}` : 'not linked yet — press Link in the corner';
 }
 
 async function linkBot() {
@@ -126,72 +214,168 @@ async function linkBot() {
   $('dialog-link').close();
   await refreshProject();
   await Promise.all([loadTree(), refreshStatus(), loadLogs()]).catch(showError);
+  updateHomeSubs();
 }
 
 async function unlinkBot() {
   await DEL('/api/bot');
   await refreshProject();
   await refreshStatus().catch(() => {});
+  updateHomeSubs();
 }
 
-// --- tree & editor -----------------------------------------------------------
+// --- home subs ---------------------------------------------------------------
 
-async function loadTree() {
-  const out = await GET('/api/tree');
-  state.tree = out.tree;
-  renderTree($('tree'), out.tree);
-  await fillRunModules();
-}
-
-function renderTree(host, nodes) {
-  host.textContent = '';
-  const build = (list, into) => {
-    for (const node of list || []) {
-      const row = document.createElement('div');
-      row.className = `row ${node.dir ? 'dir' : 'file'}`;
-      row.textContent = '';
-
-      const chev = document.createElement('span');
-      chev.className = 'chev';
-      chev.textContent = node.dir ? '▸' : '';
-      row.appendChild(chev);
-
-      const name = document.createElement('span');
-      name.className = 'name';
-      name.textContent = node.name + (node.dir ? '/' : '');
-      row.appendChild(name);
-
-      if (node.dir) {
-        row.onclick = () => row.querySelector('.nested')?.classList.toggle('hidden');
-        into.appendChild(row);
-        const wrap = document.createElement('div');
-        wrap.className = 'nested';
-        build(node.children, wrap);
-        into.appendChild(wrap);
-      } else {
-        row.onclick = () => {
-          host.querySelectorAll('.row.active').forEach((el) => el.classList.remove('active'));
-          row.classList.add('active');
-          openPath(node.path).catch(showError);
-        };
-        into.appendChild(row);
-      }
+function countFilesIn(dir) {
+  let n = 0;
+  const walk = (nodes) => {
+    for (const node of nodes || []) {
+      if (node.dir) walk(node.children);
+      else if (!dir || node.path.startsWith(`${dir}/`) || node.path === dir) n++;
     }
   };
-  build(nodes, host);
+  walk(state.tree);
+  return n;
+}
+
+function updateHomeSubs() {
+  const linked = $('bot-token').classList.contains('linked');
+  const s = state.lastStatus;
+
+  let deploy = linked ? 'open for status, deploy and webhook' : 'link a bot first';
+  if (linked && s) {
+    const n = (s.added || []).length + (s.modified || []).length + (s.deleted || []).length
+      + (s.static && s.static.changed ? 1 : 0);
+    deploy = n === 0 ? 'everything is deployed' : `${n} change${n === 1 ? '' : 's'} waiting to deploy`;
+  }
+  $('sub-deploy').textContent = deploy;
+
+  $('sub-handlers').textContent = `${plural(countFilesIn('tgcloud/handlers'))} in tgcloud/handlers`;
+  $('sub-endpoints').textContent = `${plural(countFilesIn('tgcloud/endpoints'))} in tgcloud/endpoints`;
+  $('sub-library').textContent = `${plural(countFilesIn('tgcloud/lib'))} in tgcloud/lib`;
+
+  $('sub-database').textContent = countFilesIn('tgcloud/schema.js') ? 'schema.js — tables and columns live here' : 'no schema.js yet';
+
+  const mini = state.staticSource;
+  $('sub-miniapp').textContent = mini ? `the build in ${mini}/` : 'not configured — set the static block in tgcloud.jsonc';
+  if (mini) countFilesIn(mini);
+
+  $('sub-other').textContent = `${plural(countFilesIn(''))} in the project folder`;
+}
+
+function plural(n) {
+  return `${n} file${n === 1 ? '' : 's'}`;
+}
+
+// --- sections ----------------------------------------------------------------
+
+async function openSection(key) {
+  if (key === 'deploy') {
+    show('deploy');
+    await Promise.all([refreshStatus().catch(showError), loadWebhook().catch(() => {}), loadLogs().catch(() => {})]);
+    return;
+  }
+  if (key === 'database') {
+    show('database');
+    migrateCheck().catch(showError);
+    return;
+  }
+
+  const s = SECTIONS[key];
+  if (!s) return;
+  state.section = key;
+  state.folderPath = key === 'miniapp' ? (state.staticSource || 'dist') : s.dir;
+  const moduleSection = key === 'handlers' || key === 'endpoints' || key === 'library';
+  $('btn-new-module').hidden = !moduleSection;
+  $('btn-new-file').hidden = moduleSection;
+  show('files', key);
+  await openFolder(state.folderPath);
+}
+
+async function openFolder(rel) {
+  state.folderPath = rel;
+
+  const host = $('folder-list');
+  host.textContent = '';
+  if (rel) {
+    const crumb = $('folder-crumb');
+    crumb.textContent = '';
+    const root = document.createElement('button');
+    root.className = 'crumb-item';
+    root.textContent = sectionTitle(state.section);
+    root.onclick = () => openSection(state.section).catch(showError);
+    crumb.appendChild(root);
+    for (const part of crumbParts(rel, SECTIONS[state.section].dir)) {
+      crumb.appendChild(document.createTextNode(' › '));
+      const item = document.createElement('button');
+      item.className = 'crumb-item';
+      item.textContent = part.name;
+      item.onclick = () => openFolder(part.path).catch(showError);
+      crumb.appendChild(item);
+    }
+  } else {
+    $('folder-crumb').textContent = '';
+  }
+
+  const out = await GET(`/api/list?path=${encodeURIComponent(rel)}`);
+  if (!out.entries.length) {
+    host.innerHTML = '<div class="empty">Nothing here yet — the + button creates a starter.</div>';
+    return;
+  }
+  for (const entry of out.entries) {
+    const path = rel ? `${rel}/${entry.name}` : entry.name;
+    const row = document.createElement('button');
+    row.className = `file-row ${entry.dir ? 'is-dir' : ''}`;
+    if (entry.dir) {
+      row.innerHTML = `<span class="file-name dir">${escapeHtml(entry.name)}/</span><span class="chev">›</span>`;
+      row.onclick = () => openFolder(path).catch(showError);
+    } else {
+      row.innerHTML = `<span class="file-name">${escapeHtml(entry.name)}</span>` +
+        (entry.size != null ? `<span class="file-sub">${formatSize(entry.size)}</span>` : '');
+      row.onclick = () => openPath(path).catch(showError);
+    }
+    host.appendChild(row);
+  }
+}
+
+function crumbParts(rel, base) {
+  const parts = [];
+  let acc = '';
+  for (const seg of rel.split('/')) {
+    acc = acc ? `${acc}/${seg}` : seg;
+    if (!base || acc.startsWith(base)) parts.push({ name: seg, path: acc });
+  }
+  return parts.filter((p) => p.name);
+}
+
+function formatSize(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// --- editor ------------------------------------------------------------------
+
+function isRunnableModule(path) {
+  const match = path.match(/^tgcloud\/([^/]+)\/(.+)\.js$/);
+  return Boolean(match && state.runnable.includes(match[1]));
 }
 
 async function openPath(path) {
   if (state.dirty && !confirm('Discard unsaved changes?')) return;
   const out = await GET(`/api/file?path=${encodeURIComponent(path)}`);
+  state.fromView = state.view;
   state.openPath = path;
   state.dirty = false;
+  show('editor');
   $('editor').disabled = false;
   $('editor').value = out.content;
   $('editor-path').textContent = path;
   $('editor-dirty').hidden = true;
   $('btn-save').disabled = false;
   $('btn-delete').disabled = false;
+  $('btn-run-editor').hidden = !isRunnableModule(path);
+  state.editorModule = path.replace(/^tgcloud\//, '').replace(/\.js$/, '');
 }
 
 function onEditorKey(e) {
@@ -227,7 +411,9 @@ async function deleteOpen() {
   $('editor-path').textContent = 'no file open';
   $('btn-delete').disabled = true;
   $('btn-save').disabled = true;
+  $('btn-run-editor').hidden = true;
   await Promise.all([loadTree(), refreshStatus()]).catch(showError);
+  returnToSection();
 }
 
 async function createFile() {
@@ -236,7 +422,7 @@ async function createFile() {
   await POST('/api/file', { path, content: '' });
   $('new-file-path').value = '';
   $('dialog-new-file').close();
-  await loadTree();
+  await loadTree().catch(() => {});
   await openPath(path);
 }
 
@@ -252,7 +438,7 @@ async function createModule() {
     dir === 'endpoints'
       ? 'export default async function main(args, ctx) {\n  return { ok: true };\n}\n'
       : 'export default async function main(args) {\n  console.log("message:", args.text);\n}\n';
-  const path = `${modPath}.js`;
+  const path = `tgcloud/${modPath}.js`;
   await POST('/api/file', { path, content: starter });
   $('new-module-path').value = '';
   $('dialog-new-module').close();
@@ -260,10 +446,73 @@ async function createModule() {
   await openPath(path);
 }
 
+// --- run ---------------------------------------------------------------------
+
+function promptRun(module) {
+  if (!module) return;
+  $('run-module-name').textContent = module;
+  $('run-out').hidden = true;
+  $('run-out').textContent = '';
+  $('run-args').value = '';
+  $('dialog-run').showModal();
+  $('run-args').focus();
+}
+
+async function runCurrent() {
+  const module = $('run-module-name').textContent;
+  if (!module) return;
+  const argsSrc = $('run-args').value.trim();
+  const btn = $('btn-run');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  try {
+    let args = undefined;
+    if (argsSrc) {
+      try {
+        args = JSON.parse(argsSrc);
+      } catch {
+        throw new Error('args is not valid JSON — e.g. {"text":"hi"}');
+      }
+    }
+    const out = await POST('/api/run', { module, args });
+    renderRunOutput(out, argsSrc, module);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run';
+    loadLogs().catch(() => {});
+  }
+}
+
+function renderRunOutput(out, argsSrc, module) {
+  const parts = [`<span class="head">→ ${escapeHtml(baseName(module))}(${escapeHtml(argsSrc || '')})</span>`];
+  for (const entry of out.log || []) {
+    const text = String(entry.M != null ? entry.M : (entry.m ?? ''));
+    const stamp = entry.t != null ? ` <span class="t">+${escapeHtml(String(entry.t))}s</span>` : '';
+    const origin = entry.o ? ` <span class="t">[${escapeHtml(String(entry.o))}]</span>` : '';
+    if (entry._ === 'err') parts.push(`<span class="err">${escapeHtml(text)}</span>${stamp}${origin}`);
+    else if (entry._ === 'wrn') parts.push(`<span class="wrn">${escapeHtml(text)}</span>${stamp}${origin}`);
+    else parts.push(`${escapeHtml(text)}${stamp}${origin}`);
+  }
+  const isErr = out.result && typeof out.result === 'object' && out.result.__error;
+  const value = isErr ? `Error: ${out.result.message || ''}` : '< ' + String(out.result ?? 'undefined');
+  parts.push(`<span class="${isErr ? 'err' : 'ret'}">${escapeHtml(value)}${out.time != null ? ` <span class="t">${out.time}s</span>` : ''}</span>`);
+  $('run-out').hidden = false;
+  $('run-out').innerHTML = parts.join('\n');
+}
+
+function baseName(module) {
+  return module.includes('/') ? module.slice(module.lastIndexOf('/') + 1) : module;
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+}
+
 // --- status & push -----------------------------------------------------------
 
 async function refreshStatus() {
   const out = await GET('/api/status');
+  state.lastStatus = out;
   const box = $('status-box');
   box.textContent = '';
 
@@ -275,7 +524,7 @@ async function refreshStatus() {
   };
 
   if (!out.token) {
-    line('meta', 'not linked — press "Link bot…"');
+    line('meta', 'not linked — press Link in the corner');
     return out;
   }
 
@@ -290,7 +539,7 @@ async function refreshStatus() {
     for (const p of s.added || []) line('add', `+ ${s.source}/${p}`);
     for (const p of s.modified || []) line('mod', `~ ${s.source}/${p}`);
     for (const p of s.deleted || []) line('del', `− ${s.source}/${p}`);
-    if (s.configChanged) line('mod', '~ static serving config');
+    if (s.configChanged) line('mod', '~ Mini App serving config');
   }
 
   const count = (out.added || []).length + (out.modified || []).length + (out.deleted || []).length;
@@ -349,72 +598,17 @@ async function pushConfirm() {
   if (out.revision != null) bits.push(`deployed · revision ${out.revision}`);
   if (out.uploaded) bits.push(`+ ${out.uploaded.count} static file(s) (${out.uploaded.size})`);
   if (out.staticUrl) bits.push(out.staticUrl);
-  if (out.dbChanges && out.dbChanges.length) bits.push(`${out.dbChanges.length} DB change(s) pending — check Migrations`);
+  if (out.dbChanges && out.dbChanges.length) bits.push(`${out.dbChanges.length} DB change(s) pending — check Database`);
   toast(bits.length ? bits.join(' · ') : 'deployed');
   await Promise.all([refreshStatus(), loadLogs()]).catch(() => {});
+  updateHomeSubs();
 }
 
 async function doFetch() {
   const out = await POST('/api/fetch');
   toast(`snapshot updated — ${out.count} module(s)${out.revision != null ? ` · revision ${out.revision}` : ''}`);
   await refreshStatus();
-}
-
-// --- run ---------------------------------------------------------------------
-
-async function fillRunModules() {
-  const sel = $('run-module');
-  sel.textContent = '';
-  const runnable = new Set(state.runnable || []);
-  const collect = (nodes, prefix) => {
-    for (const node of nodes || []) {
-      if (node.dir) collect(node.children, `${prefix}${node.name}/`);
-      else if (node.name.endsWith('.js') && runnable.has(prefix.split('/')[0])) {
-        const option = document.createElement('option');
-        option.value = `${prefix}${node.name}`.replace(/\.js$/, '');
-        option.textContent = option.value;
-        sel.appendChild(option);
-      }
-    }
-  };
-  collect(state.tree, '');
-  if (!sel.options.length) {
-    sel.innerHTML = '<option value="">no runnable modules yet</option>';
-    $('btn-run').disabled = true;
-  } else {
-    $('btn-run').disabled = false;
-  }
-}
-
-async function runModule() {
-  const module = $('run-module').value;
-  if (!module) return;
-  const args = $('run-args').value.trim();
-  const out = await POST('/api/run', { module, args: args || undefined });
-
-  const escLike = escapeHtml;
-  const parts = [`<span class="head">→ ${escLike(baseName(module))}(${escLike(args || '')})</span>`];
-  for (const entry of out.log || []) {
-    const text = String(entry.M != null ? entry.M : (entry.m ?? ''));
-    const stamp = entry.t != null ? ` <span class="t">+${escLike(String(entry.t))}s</span>` : '';
-    const origin = entry.o ? ` <span class="t">[${escLike(String(entry.o))}]</span>` : '';
-    if (entry._ === 'err') parts.push(`<span class="err">${escLike(text)}</span>${stamp}${origin}`);
-    else if (entry._ === 'wrn') parts.push(`<span class="wrn">${escLike(text)}</span>${stamp}${origin}`);
-    else parts.push(`${escLike(text)}${stamp}${origin}`);
-  }
-  const isErr = out.result && typeof out.result === 'object' && out.result.__error;
-  const value = isErr ? `Error: ${out.result.message || ''}` : '< ' + String(out.result ?? 'undefined');
-  parts.push(`<span class="${isErr ? 'err' : 'ret'}">${escLike(value)}${out.time != null ? ` <span class="t">${out.time}s</span>` : ''}</span>`);
-  $('run-out').hidden = false;
-  $('run-out').innerHTML = parts.join('\n');
-}
-
-function baseName(module) {
-  return module.includes('/') ? module.slice(module.lastIndexOf('/') + 1) : module;
-}
-
-function escapeHtml(text) {
-  return String(text).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  updateHomeSubs();
 }
 
 // --- migrations --------------------------------------------------------------

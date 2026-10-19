@@ -15,6 +15,8 @@ test.before(async () => {
   token = cloud.mintToken();
   proj = new Project(cloud, token, 'studio');
   proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { console.log(2); return { echo: 1 }; }\n');
+  proj.write('tgcloud.jsonc', JSON.stringify({ static: { source: 'dist', spa: true } }));
+  proj.write('dist/index.html', '<h1>mini</h1>\n');
 });
 
 const api = async (childPort, path, { method = 'GET', body } = {}) => {
@@ -49,6 +51,18 @@ test('the studio serves the UI and a safe local API', async () => {
     const tree = await api(port, '/api/tree');
     assert.equal(tree.status, 200, tree.text);
     assert.match(JSON.stringify(tree.json), /tgcloud/);
+
+    const list = await api(port, '/api/list?path=tgcloud');
+    assert.equal(list.status, 200, list.text);
+    assert.ok(list.json.entries.some((e) => e.name === 'handlers' && e.dir));
+    const root = await api(port, '/api/list');
+    assert.equal(root.status, 200, root.text);
+    const names = root.json.entries.map((e) => e.name);
+    assert.ok(names.includes('tgcloud') && names.includes('tgcloud.jsonc'));
+
+    const info = await api(port, '/api/project');
+    assert.equal(info.status, 200, info.text);
+    assert.deepEqual(info.json.static, { source: 'dist', spa: true });
 
     const forbidden = await api(port, '/api/file?path=.tgpilot%2Fstate.json');
     assert.equal(forbidden.status, 400);

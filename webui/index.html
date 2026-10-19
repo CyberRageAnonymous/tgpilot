@@ -8,68 +8,130 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">tgpilot <span class="brand-sub">studio</span></div>
-  <div class="topbar-mid">
-    <button id="btn-status" class="ghost" title="Compare the folder with the bot">Status</button>
-    <button id="btn-fetch" class="ghost" title="Refresh the local snapshot from the bot">Fetch</button>
-  </div>
+  <button id="btn-back" class="ghost back" hidden>← Back</button>
+  <div class="top-title" id="top-title">tgpilot studio</div>
   <div class="bot-state">
     <span id="bot-token" class="token-chip">not linked</span>
-    <button id="btn-link" class="ghost small">Link bot…</button>
+    <button id="btn-link" class="ghost small">Link</button>
     <button id="btn-unlink" class="ghost small" hidden>Unlink</button>
   </div>
 </header>
 
-<main class="layout">
-  <!-- File tree -->
-  <section class="panel panel-tree">
-    <div class="panel-head">
-      <h2>Files</h2>
-      <div class="icon-row">
-        <button id="btn-new-module" class="ghost small" title="Scaffold a new module file">+ module</button>
-        <button id="btn-new-file" class="ghost small" title="Create a plain text file">+ file</button>
+<main class="shell">
+
+  <!-- Home: the sections, like the BotFather serverless panel -->
+  <section id="view-home" class="view">
+    <div class="hero">
+      <div class="hero-icon">
+        <svg viewBox="0 0 48 34" width="64" height="46" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 30h22a9 9 0 0 0 2.4-17.7A14 14 0 0 0 10 9.3 10 10 0 0 0 14 30z"/>
+        </svg>
       </div>
+      <h1>Serverless <span class="beta">beta</span></h1>
+      <p class="hero-sub">Run your bot logic in the cloud without hosting a server.
+      Handle updates with JavaScript functions, share code via libraries</p>
+      <div class="hero-bot" id="hero-bot">the empty operating system is not connected to any bot</div>
     </div>
-    <div id="tree" class="tree" tabindex="0"></div>
+
+    <div class="section-list">
+      <button class="section-row" data-open="deploy">
+        <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="13" rx="2.5"/><path d="M7 9.5l-2.6 2 2.6 2M12.6 9.5l2.6 2-2.6 2M10.4 15l2.6-5"/></svg></span>
+        <span class="section-text">
+          <span class="section-title">Deploy &amp; status</span>
+          <span class="section-sub" id="sub-deploy">link a bot first</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+
+      <button class="section-row" data-open="handlers">
+        <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 6 13h5l-1.5 9L18 10h-5l1.6-8z"/></svg></span>
+        <span class="section-text">
+          <span class="section-title">Handlers</span>
+          <span class="section-sub" id="sub-handlers">functions that react to Telegram update types</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+
+      <button class="section-row" data-open="endpoints">
+        <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/><path d="M6.7 12h3.6M13.7 12h3.6"/></svg></span>
+        <span class="section-text">
+          <span class="section-title">Endpoints</span>
+          <span class="section-sub" id="sub-endpoints">functions your Mini App can call</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+
+      <button class="section-row" data-open="library">
+        <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5c-2 0-2.4 1.4-2.4 2.6v2.2C6.6 11.2 5.7 12 4.4 12c1.3 0 2.2.8 2.2 2.2v2.2C6.6 17.6 7 19 9 19M15 5c2 0 2.4 1.4 2.4 2.6v2.2c0 1.4.9 2.2 2.2 2.2-1.3 0-2.2.8-2.2 2.2v2.2C17.4 17.6 17 19 15 19"/></svg></span>
+        <span class="section-text">
+          <span class="section-title">Library</span>
+          <span class="section-sub" id="sub-library">shared modules imported by your code</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+
+      <button class="section-row" data-open="database">
+        <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg></span>
+        <span class="section-text">
+          <span class="section-title">Database</span>
+          <span class="section-sub" id="sub-database">define your tables and columns in code</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+
+      <button class="section-row" data-open="miniapp">
+        <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2.5h9v8.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/><path d="M13.2 12.6l-2 2 2 2M17 12.6l-2 2 2 2"/></svg></span>
+        <span class="section-text">
+          <span class="section-title">Mini App Files</span>
+          <span class="section-sub" id="sub-miniapp">the front-end your users open in Telegram</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+
+      <button class="section-row" data-open="other">
+        <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M14 3.5V8h4.5"/></svg></span>
+        <span class="section-text">
+          <span class="section-title">Other files</span>
+          <span class="section-sub" id="sub-other">README, config and anything else in the folder</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+    </div>
   </section>
 
-  <!-- Editor + run -->
-  <section class="panel panel-editor">
-    <div class="panel-head editor-head">
+  <!-- A folder inside a section -->
+  <section id="view-files" class="view" hidden>
+    <div class="crumb" id="folder-crumb"></div>
+    <div class="file-list" id="folder-list"></div>
+    <div class="view-actions">
+      <button id="btn-new-module" class="primary">+ module</button>
+      <button id="btn-new-file" class="ghost">+ file</button>
+    </div>
+  </section>
+
+  <!-- Editor -->
+  <section id="view-editor" class="view" hidden>
+    <div class="editor-head">
       <span id="editor-path" class="editor-path">no file open</span>
       <span id="editor-dirty" class="dirty-dot" hidden>●</span>
-      <div class="icon-row">
-        <button id="btn-save" class="primary small" disabled>Save</button>
-        <button id="btn-delete" class="ghost small" disabled>Delete</button>
-      </div>
+      <span class="spacer"></span>
+      <button id="btn-run-editor" class="ghost small" hidden>Run</button>
+      <button id="btn-save" class="primary small" disabled>Save</button>
+      <button id="btn-delete" class="ghost small" disabled>Delete</button>
     </div>
     <textarea id="editor" spellcheck="false" disabled></textarea>
-    <div class="runbox">
-      <div class="panel-head run-head">
-        <h2>Run in the cloud</h2>
-        <div class="icon-row">
-          <select id="run-module" class="select"></select>
-          <button id="btn-run" class="primary small">Run</button>
-        </div>
-      </div>
-      <textarea id="run-args" class="args" placeholder="{ text: 'hi' }" spellcheck="false"></textarea>
-      <pre id="run-out" class="run-out" hidden></pre>
-    </div>
   </section>
 
-  <!-- Bot state column -->
-  <section class="side">
-    <div class="panel">
-      <div class="panel-head"><h2>Deploy</h2></div>
-      <div id="status-box" class="status-box"></div>
-      <div class="stack">
-        <button id="btn-push" class="primary">Review changes…</button>
-        <div class="hint">push deploys changed modules and the Mini App build</div>
-      </div>
+  <!-- Database -->
+  <section id="view-database" class="view" hidden>
+    <div class="file-list">
+      <button class="file-row" id="row-schema">
+        <span class="file-name">tgcloud/schema.js</span>
+        <span class="file-sub">edit the tables</span>
+      </button>
     </div>
-
     <div class="panel">
-      <div class="panel-head"><h2>Migrations</h2>
+      <div class="panel-head"><h2>Database changes</h2>
         <button id="btn-migrate-check" class="ghost small">Check</button>
       </div>
       <div id="migrate-box" class="status-box"><div class="hint">compare schema.js against the database</div></div>
@@ -78,28 +140,44 @@
         <button id="btn-migrate-recheck" class="ghost small">Re-check</button>
       </div>
     </div>
+  </section>
+
+  <!-- Deploy & status -->
+  <section id="view-deploy" class="view" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>What differs from the bot</h2>
+        <button id="btn-status" class="ghost small">Refresh</button>
+      </div>
+      <div id="status-box" class="status-box"></div>
+      <div class="stack">
+        <button id="btn-push" class="primary">Review changes…</button>
+        <button id="btn-fetch" class="ghost">Refresh snapshot from the bot</button>
+        <div class="hint">push deploys changed modules and the Mini App build</div>
+      </div>
+    </div>
 
     <div class="panel">
       <div class="panel-head"><h2>Webhook</h2>
         <button id="btn-webhook-sync" class="ghost small">Sync</button>
       </div>
-      <div id="webhook-box" class="status-box"><div class="hint">show the bot's webhook state</div></div>
+      <div id="webhook-box" class="status-box"><div class="hint">the bot's webhook state appears here</div></div>
     </div>
 
     <div class="panel">
       <div class="panel-head"><h2>Journal</h2>
-        <div class="icon-row">
+        <span class="icon-row">
           <select id="logs-level" class="select">
             <option value="info">info+</option>
             <option value="warn">warn+</option>
             <option value="error">errors</option>
           </select>
           <button id="btn-logs-clear" class="ghost small">Clear</button>
-        </div>
+        </span>
       </div>
       <div id="logs-box" class="log-list"></div>
     </div>
   </section>
+
 </main>
 
 <!-- Dialogs -->
@@ -147,6 +225,17 @@
   <div class="dialog-actions">
     <button class="ghost" data-close>Cancel</button>
     <button id="btn-new-file-save" class="primary">Create</button>
+  </div>
+</dialog>
+
+<dialog id="dialog-run" class="dialog">
+  <div class="dialog-head"><h3>Run in the cloud</h3><button class="ghost small" data-close>×</button></div>
+  <div class="hint">Runs <code id="run-module-name"></code> on the bot's server, with live logs — nothing is deployed.</div>
+  <input id="run-args" class="text-input" placeholder="{ text: 'hi' }" spellcheck="false">
+  <pre id="run-out" class="run-out" hidden></pre>
+  <div class="dialog-actions">
+    <button class="ghost" data-close>Close</button>
+    <button id="btn-run" class="primary">Run</button>
   </div>
 </dialog>
 
