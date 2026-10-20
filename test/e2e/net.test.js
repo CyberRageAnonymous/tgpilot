@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startMockCloud, stopMockCloud, Project, startStudio, freePort } from './helpers/helpers.js';
 import { startConnectProxy, startSocks5Proxy } from './helpers/proxy.js';
+import http from 'node:http';
 
 let cloud;
 
@@ -103,6 +104,54 @@ test('a failing DNS gets the DoH line before any proxy is touched', async () => 
   assert.match(res.out, /TGPILOT_PROXY=http:\/\/host:port/);
 });
 
+test('DNS over HTTPS replaces a hijacked system resolver', async () => {
+  const proj = project('doh');
+  // A stand-in resolver: it answers with the mock cloud's real address.
+  const resolver = http.createServer((req, res) => {
+    const name = new URL(req.url, 'http://resolver').searchParams.get('name');
+    res.writeHead(200, { 'Content-Type': 'application/dns-json' });
+    res.end(
+      JSON.stringify({
+        Status: 0,
+        Answer: [
+          { name, type: 1, data: '127.0.0.1' },
+          { name, type: 28, data: '::1' },
+        ],
+      })
+    );
+  });
+  const resolverPort = await new Promise((r) => resolver.listen(0, '127.0.0.1', () => r(resolver.address().port)));
+  try {
+    proj.env.TGPILOT_DOH = '1';
+    proj.env.TGPILOT_DOH_URL = `http://127.0.0.1:${resolverPort}/dns-query`;
+    const res = await proj.cli(['ping', '--probe']);
+    assert.equal(res.code, 0, res.out);
+    assert.match(res.out, /✓ Reach: the cloud answered/);
+    assert.match(res.out, /Route probe: on/);
+    assert.match(res.out, /DNS over HTTPS \(127\.0\.0\.1(:\d+)?\): ::1, 127\.0\.0\.1/);
+  } finally {
+    resolver.close();
+  }
+});
+
+test('the studio can turn DNS over HTTPS on and off', async () => {
+  const port = await freePort();
+  const proj = new Project(cloud, null, 'dohstudio');
+  proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  const child = await startStudio(proj, port);
+  try {
+    const off = await api(port, '/api/network');
+    assert.equal(off.json.config.doh, false);
+    const on = await api(port, '/api/network', { method: 'POST', body: { doh: true } });
+    assert.equal(on.json.config.doh, true);
+    assert.equal(on.json.config.dohSource, 'project');
+    const back = await api(port, '/api/network', { method: 'POST', body: { doh: false } });
+    assert.equal(back.json.config.doh, false);
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
+
 test('the studio can force an IP family', async () => {
   const port = await freePort();
   const proj = new Project(cloud, null, 'family');
@@ -114,7 +163,11 @@ test('the studio can force an IP family', async () => {
     assert.equal(saved.json.config.family, 6);
     assert.equal(saved.json.config.familySource, 'project');
 
-    const forced = await api(port, '/api/network/test', { method: 'POST', body: {} });
+    const quiet = await api(port, '/api/network/test', { method: 'POST', body: {} });
+    assert.equal(quiet.status, 200, quiet.text);
+    assert.ok(!quiet.json.steps.some((s) => s.id === 'ipv4' || s.id === 'ipv6'), 'no route probes without asking');
+
+    const forced = await api(port, '/api/network/test', { method: 'POST', body: { probe: true } });
     assert.equal(forced.status, 200, forced.text);
     assert.ok(forced.json.steps.some((s) => s.id === 'ipv4' || s.id === 'ipv6'));
 

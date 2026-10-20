@@ -214,6 +214,7 @@ async function openNetwork() {
   $('net-proxy').value = config.proxy || '';
   $('net-apiurl').value = config.apiUrl || '';
   $('net-family').value = config.family === 4 ? '4' : config.family === 6 ? '6' : 'auto';
+  $('net-doh').checked = Boolean(config.doh);
   $('net-result').innerHTML = '<div class="hint">run a test to see where the chain breaks</div>';
   show('network');
 }
@@ -222,7 +223,8 @@ async function saveNetwork() {
   const proxy = $('net-proxy').value.trim();
   const apiUrl = $('net-apiurl').value.trim();
   const family = $('net-family').value;
-  const out = await POST('/api/network', { proxy, apiUrl, family });
+  const doh = $('net-doh').checked;
+  const out = await POST('/api/network', { proxy, apiUrl, family, doh });
   toast(out.config.proxy ? `proxy saved: ${out.config.proxy}` : 'proxy cleared — direct connection');
   await refreshNetworkSummary();
   return out;
@@ -232,7 +234,7 @@ async function testNetwork() {
   const proxy = $('net-proxy').value.trim();
   const apiUrl = $('net-apiurl').value.trim();
   $('net-result').innerHTML = '<div class="hint">testing…</div>';
-  const out = await POST('/api/network/test', { proxy, apiUrl });
+  const out = await POST('/api/network/test', { proxy, apiUrl, probe: $('net-probe').checked });
   const rows = (out.steps || [])
     .map((step) => {
       const mark = step.ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
@@ -250,7 +252,7 @@ async function refreshNetworkSummary() {
   const box = $('network-summary');
   if (!box) return;
   try {
-    const out = await POST('/api/network/test', {});
+    const out = await POST('/api/network/test', { deep: false });
     const steps = out.steps || [];
     const proxy = steps.find((s) => s.id === 'proxy');
     const dnsStep = steps.find((s) => s.id === 'dns');

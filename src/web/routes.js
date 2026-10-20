@@ -516,6 +516,7 @@ async function handleNetworkGet() {
 async function handleNetworkSave(body) {
   const proxy = body?.proxy === undefined ? undefined : String(body.proxy ?? '').trim();
   const apiUrl = body?.apiUrl === undefined ? undefined : String(body.apiUrl ?? '').trim();
+  const dohRaw = body?.doh === undefined ? undefined : body.doh === true || body.doh === 'true';
   const familyRaw = body?.family === undefined ? undefined : String(body.family ?? '').trim();
   const family =
     familyRaw === undefined
@@ -547,7 +548,12 @@ async function handleNetworkSave(body) {
       throw badRequest('That server address cannot be read. Use http://host:port or https://host.');
     }
   }
-  const config = saveNetworkConfig({ proxy, apiUrl, family: family === undefined ? undefined : family || null });
+  const config = saveNetworkConfig({
+    proxy,
+    apiUrl,
+    family: family === undefined ? undefined : family || null,
+    doh: dohRaw === undefined ? undefined : dohRaw,
+  });
   invalidateNetworkCache();
   log('info', 'network', 'Network settings changed from the studio.', {
     proxy: config.proxy || '(none)',
@@ -560,6 +566,8 @@ async function handleNetworkTest(body) {
   const result = await diagnose({
     proxy: body?.proxy === undefined ? undefined : String(body.proxy ?? '').trim(),
     apiUrl: body?.apiUrl === undefined ? undefined : String(body.apiUrl ?? '').trim(),
+    deep: body?.deep !== false,
+    probe: body?.probe === true,
   });
   const started = Date.now();
   try {

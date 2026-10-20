@@ -157,6 +157,13 @@
           <span class="field-label">Server (optional)</span>
           <input id="net-apiurl" type="text" spellcheck="false" placeholder="https://cloud.telegram.org">
         </label>
+        <label class="field checkbox-field">
+          <span class="field-label">DNS over HTTPS</span>
+          <label class="switch">
+            <input id="net-doh" type="checkbox">
+            <span>ask a DNS resolver over HTTPS — the way out of a hijacked DNS</span>
+          </label>
+        </label>
         <label class="field">
           <span class="field-label">IP family</span>
           <select id="net-family" class="select">
@@ -169,6 +176,10 @@
           <button id="btn-network-save" class="primary small">Save</button>
           <button id="btn-network-test" class="ghost small">Test connection</button>
         </div>
+        <label class="switch">
+          <input id="net-probe" type="checkbox">
+          <span>deep route check — opens direct connections to the cloud addresses and a DNS-over-HTTPS resolver (off by default: a VPN client can react to them)</span>
+        </label>
         <div id="net-result" class="status-box"><div class="hint">run a test to see where the chain breaks</div></div>
       </div>
     </div>

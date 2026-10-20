@@ -135,6 +135,8 @@ sees it. `--port` or `TGPILOT_WEB_PORT` changes the port.
 | `HTTPS_PROXY` / `ALL_PROXY` | used as a fallback when `TGPILOT_PROXY` is not set |
 | `TGPILOT_TIMEOUT` | how long a cloud request may take, in milliseconds (default 20000) |
 | `TGPILOT_IP_FAMILY` | force the IP family for cloud requests: `4` or `6` — useful when a filtered DNS hijacks IPv4 but IPv6 still works |
+| `TGPILOT_DOH=1` | resolve the cloud over DNS-over-HTTPS and connect to the genuine address |
+| `TGPILOT_DOH_URL` | use a specific DNS-over-HTTPS resolver (e.g. a local `cloudflared`) |
 
 ### Behind a filter or a VPN
 
@@ -166,9 +168,25 @@ ssh -R 10809:127.0.0.1:10809 user@server   # then use socks5://127.0.0.1:10809
 
 Some networks answer with a private address (`10.x`, `192.168.x`) where a
 public one belongs — the DNS was hijacked, and that route can never work.
-`tgpilot ping` says so and checks the other family as well: when the IPv6
-answer is genuine it is used automatically, and `TGPILOT_IP_FAMILY=6` (or the
-**IP family** field in the studio) forces it.
+`tgpilot ping` says so.
+
+Three ways out, in order of how little you have to change:
+
+1. **DNS over HTTPS** — turn it on in the studio (**Network → DNS over
+   HTTPS**) or with `TGPILOT_DOH=1`. The real address is then asked from a
+   resolver over HTTPS, where the filter has no say, and tgpilot connects to
+   that address directly.
+2. **Force the other family** — `TGPILOT_IP_FAMILY=6` (or the **IP family**
+   dropdown) when only the IPv6 answer is genuine.
+3. **A proxy** — `TGPILOT_PROXY=…`; the proxy resolves the name for you.
+
+`TGPILOT_DOH_URL` points the resolver somewhere else (a local
+`cloudflared`/`dnscrypt-proxy`, for example).
+
+`tgpilot ping --probe` additionally opens direct connections to the cloud
+addresses and to a DNS-over-HTTPS resolver to show which route works. Those
+extra connections are **not** made by default — a VPN client can react to
+them — and the studio's deep route check is a checkbox you have to tick.
 
 The journal of everything tgpilot did lives in `.tgpilot/logs/`; read it with
 `tgpilot logs`, filter with `-n`, `--level`, `--scope`, and `--clear` to wipe.

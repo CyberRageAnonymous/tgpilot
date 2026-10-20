@@ -185,6 +185,8 @@ html, body {
   width: 100%;
 }
 .field input:focus { outline: none; border-color: var(--accent); }
+.switch { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--dim); }
+.switch input { width: auto; }
 .stack-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .net-step { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; flex-wrap: wrap; }
 .net-step .ok { color: var(--accent-2); }

@@ -3,6 +3,7 @@ import net from 'node:net';
 import { loadState, saveState } from './state.js';
 import { proxyFromEnv } from '../api/tunnel.js';
 import { probeAddress, isHijacked, familyFromEnv } from '../api/http.js';
+import { dohResolve } from '../api/doh.js';
 
 // Where the tool talks to, and how it gets there. The studio can change this
 // at runtime (a saved project setting), the environment can override it for
@@ -26,6 +27,7 @@ function stored() {
     proxy: typeof net_.proxy === 'string' ? net_.proxy : null,
     apiUrl: typeof net_.apiUrl === 'string' ? net_.apiUrl : null,
     family: net_.family === 4 || net_.family === 6 ? net_.family : null,
+    doh: net_.doh === true,
   };
 }
 
@@ -35,6 +37,7 @@ export function networkConfig() {
   const envProxy = ENV_PROXY();
   const envApi = ENV_API_URL();
   const envFamily = familyFromEnv();
+  const envDoh = process.env.TGPILOT_DOH === '1' || process.env.TGPILOT_DOH === 'true';
   return {
     proxy: saved.proxy !== null ? saved.proxy : envProxy,
     apiUrl: saved.apiUrl !== null ? saved.apiUrl : envApi,
@@ -42,10 +45,12 @@ export function networkConfig() {
     proxySource: saved.proxy !== null ? 'project' : envProxy ? 'environment' : 'none',
     apiUrlSource: saved.apiUrl !== null ? 'project' : envApi ? 'environment' : 'default',
     familySource: saved.family !== null ? 'project' : envFamily ? 'environment' : 'auto',
+    doh: saved.doh || envDoh,
+    dohSource: saved.doh ? 'project' : envDoh ? 'environment' : 'off',
   };
 }
 
-export function saveNetworkConfig({ proxy, apiUrl, family } = {}) {
+export function saveNetworkConfig({ proxy, apiUrl, family, doh } = {}) {
   const state = loadState();
   const previous = state.network && typeof state.network === 'object' ? state.network : {};
   state.network = {
@@ -59,6 +64,7 @@ export function saveNetworkConfig({ proxy, apiUrl, family } = {}) {
         : family === 4 || family === 6
           ? Number(family)
           : null,
+    doh: doh === undefined ? previous.doh === true : doh === true || doh === 'true',
   };
   saveState(state);
   return networkConfig();
@@ -88,7 +94,12 @@ export async function proxyPortAlive(proxy) {
 
 // The same checks the CLI prints, as data, so the studio can show the same
 // story in the browser.
-export async function diagnose({ apiUrl, proxy, deep = true } = {}) {
+//
+// `probe` stays off by default on purpose: it opens direct connections to
+// the cloud addresses (and to a DNS-over-HTTPS resolver) to find out which
+// route works. On a machine whose network is watched by a VPN client such
+// extra connections can disturb it, so they only happen when asked for.
+export async function diagnose({ apiUrl, proxy, deep = true, probe = false } = {}) {
   const config = networkConfig();
   const base = apiUrl || config.apiUrl || 'https://cloud.telegram.org';
   const proxyValue = proxy === undefined ? config.proxy : proxy;
@@ -126,7 +137,7 @@ export async function diagnose({ apiUrl, proxy, deep = true } = {}) {
     });
   }
 
-  if (deep && addresses.length) {
+  if (deep && probe && addresses.length) {
     const target = new URL(base);
     const port = Number(target.port) || (target.protocol === 'https:' ? 443 : 80);
     const v4 = addresses.find((ip) => ip.includes('.') && !ip.includes(':'));
@@ -137,7 +148,7 @@ export async function diagnose({ apiUrl, proxy, deep = true } = {}) {
         id: 'ipv4',
         ok: false,
         text: `IPv4: ${v4} is a private address — a hijacked DNS answer, this route can never work`,
-        hint: 'use a proxy, or force the other family with TGPILOT_IP_FAMILY=6',
+        hint: 'use a proxy, force the other family with TGPILOT_IP_FAMILY=6, or turn on DNS over HTTPS',
       });
     }
     if (v6) {
@@ -155,6 +166,31 @@ export async function diagnose({ apiUrl, proxy, deep = true } = {}) {
         id: 'ipv4',
         ok: probe.ok,
         text: probe.ok ? `IPv4: ${v4} answers — this route works` : `IPv4: ${v4} — ${probe.reason}`,
+        hint: '',
+      });
+    }
+
+    // What a DNS-over-HTTPS resolver says about the same name — often the
+    // only honest answer on a filtered network. Only asked for when the
+    // route probe is on.
+    try {
+      const { v4: dohV4, v6: dohV6, resolver } = await dohResolve(target.hostname);
+      const list = [...dohV6, ...dohV4].join(', ');
+      steps.push({
+        id: 'doh',
+        ok: Boolean(list),
+        text: list ? `DNS over HTTPS (${resolver}): ${list}` : `DNS over HTTPS (${resolver}): no answer`,
+        hint: list
+          ? hijacked
+            ? 'the system DNS is hijacked — turn on DNS over HTTPS in the Network card'
+            : ''
+          : 'the resolver did not answer',
+      });
+    } catch (err) {
+      steps.push({
+        id: 'doh',
+        ok: false,
+        text: `DNS over HTTPS: ${err.code || err.message}`,
         hint: '',
       });
     }

@@ -1,6 +1,7 @@
 const PROD_URL = 'https://cloud.telegram.org';
 import { tunnelRequest } from './tunnel.js';
 import { directRequest, familyFromEnv, preferredFamily } from './http.js';
+import { dohResolve } from './doh.js';
 import { networkConfig } from '../project/network.js';
 
 // The project may carry its own server address and proxy (set in the
@@ -50,7 +51,27 @@ async function doRequest({ method, url, headers, body }) {
     });
   }
   const target = new URL(url);
-  const family = effectiveConfig().family || familyFromEnv() || (await preferredFamily(target.hostname));
+  const config = effectiveConfig();
+  let family = config.family || familyFromEnv();
+  let connectIp = null;
+  let servername = null;
+
+  // With DNS over HTTPS the system resolver is bypassed completely: the
+  // genuine address of the cloud comes from an HTTPS resolver the filter
+  // cannot touch.
+  if (config.doh) {
+    const addresses = await dohAddresses(target.hostname);
+    if (addresses.length) {
+      const wanted = family === 6 ? addresses.filter((ip) => ip.includes(':')) : addresses.filter((ip) => !ip.includes(':'));
+      const pick = wanted[0] || addresses[0];
+      connectIp = pick;
+      servername = target.hostname;
+      family = pick.includes(':') ? 6 : 4;
+    }
+  }
+
+  if (!family) family = await preferredFamily(target.hostname);
+
   return directRequest({
     method,
     url,
@@ -58,7 +79,27 @@ async function doRequest({ method, url, headers, body }) {
     body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : Buffer.from(body),
     family,
     timeout: requestTimeout(),
+    connectIp,
+    servername,
   });
+}
+
+// The DoH answer is cached for a minute — the addresses do not change often
+// and a lookup per request would be wasteful.
+const dohCache = new Map();
+
+async function dohAddresses(hostname) {
+  const cached = dohCache.get(hostname);
+  if (cached && Date.now() - cached.at < 60000) return cached.addresses;
+  try {
+    const { v4, v6 } = await dohResolve(hostname);
+    const addresses = [...v6, ...v4];
+    dohCache.set(hostname, { at: Date.now(), addresses });
+    return addresses;
+  } catch (err) {
+    dohCache.delete(hostname);
+    throw err;
+  }
 }
 
 export function serverBase() {

@@ -57,8 +57,10 @@ function lookupFor(family) {
 }
 
 // A plain HTTP(S) request with a fetch-compatible answer, so the envelope
-// parser does not care how the bytes arrived.
-export function directRequest({ method, url, headers = {}, body = null, family = familyFromEnv(), timeout = 20000 }) {
+// parser does not care how the bytes arrived. `connectIp` lets the caller
+// pin the address (a DNS-over-HTTPS answer) while the Host header and the
+// TLS server name stay the real hostname.
+export function directRequest({ method, url, headers = {}, body = null, family = familyFromEnv(), timeout = 20000, connectIp = null, servername = null }) {
   return new Promise((resolve, reject) => {
     let target;
     try {
@@ -71,12 +73,14 @@ export function directRequest({ method, url, headers = {}, body = null, family =
     const request = lib.request(
       {
         method,
-        hostname: target.hostname,
+        hostname: connectIp || target.hostname,
+        host: target.host,
         port: target.port || (target.protocol === 'https:' ? 443 : 80),
         path: (target.pathname === '' ? '/' : target.pathname) + (target.search || ''),
         headers,
         timeout,
-        ...(lookupFor(family) ? { lookup: lookupFor(family) } : {}),
+        ...(servername ? { servername } : {}),
+        ...(connectIp ? {} : lookupFor(family) ? { lookup: lookupFor(family) } : {}),
       },
       (res) => {
         const chunks = [];
@@ -105,8 +109,15 @@ export function directRequest({ method, url, headers = {}, body = null, family =
 // connection to that address?".
 export function probeAddress({ host, family = 0, port = 443, timeout = 5000, secure = true }) {
   return new Promise((resolve) => {
+    const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':');
     const socket = secure
-      ? tls.connect({ host, port, family: family || undefined, servername: host, rejectUnauthorized: false })
+      ? tls.connect({
+          host,
+          port,
+          family: family || undefined,
+          ...(isIp ? {} : { servername: host }),
+          rejectUnauthorized: false,
+        })
       : net.connect({ host, port, family: family || undefined });
     const done = (result) => {
       try {
