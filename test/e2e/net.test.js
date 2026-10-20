@@ -259,6 +259,43 @@ test('HTTPS travels through a SOCKS5 proxy', async () => {
   }
 });
 
+test('a body that arrives in its own packet is still read', async () => {
+  // The head and the body in separate TLS records: the second one arrives
+  // after the handshake, when a flowing socket would swallow it.
+  const https = await import('node:https');
+  const { TEST_KEY, TEST_CERT } = await import('./helpers/tls.js');
+  const server = https.createServer({ key: TEST_KEY, cert: TEST_CERT }, (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': '44' });
+    res.write('{"ok":true,"result":{"split":"into two');
+    setTimeout(() => res.end(' packets"}}'), 120);
+  });
+  const tlsPort = await new Promise((r) => server.listen(0, '127.0.0.1', () => r(server.address().port)));
+
+  const { server: proxyServer, port: proxyPort } = await startSocks5Proxy();
+  try {
+    const { tunnelRequest } = await import('../../src/api/tunnel.js');
+    const previous = process.env.TGPILOT_PROXY;
+    process.env.TGPILOT_PROXY = `socks5://127.0.0.1:${proxyPort}`;
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    try {
+      const out = await tunnelRequest({
+        method: 'GET',
+        url: `https://127.0.0.1:${tlsPort}/capabilities`,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      assert.equal(out.status, 200);
+      assert.match(String(await out.text()), /split/);
+    } finally {
+      if (previous === undefined) delete process.env.TGPILOT_PROXY;
+      else process.env.TGPILOT_PROXY = previous;
+      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    }
+  } finally {
+    proxyServer.close();
+    server.close();
+  }
+});
+
 test('a running local proxy is discovered and named', async () => {
   const { server, port } = await startSocks5Proxy();
   try {

@@ -48,6 +48,10 @@ export class ProxyError extends Error {
 
 // A buffered reader: the socket keeps one permanent listener so no bytes
 // are lost between reads.
+//
+// Every wait here has to mean "wait until MORE bytes arrive" — waiting for
+// "the buffer is not empty" would spin in microtasks and never let the
+// event loop read the socket again.
 class Reader {
   constructor(socket) {
     this.socket = socket;
@@ -86,7 +90,8 @@ class Reader {
     for (const resolve of waiters) resolve();
   }
 
-  async wait() {
+  // Waits for the next chunk of data (or the end of the stream).
+  async waitForData() {
     while (this.buffer.length === 0) {
       if (this.error) throw this.error;
       if (this.ended) return;
@@ -94,12 +99,17 @@ class Reader {
     }
   }
 
-  async read(n) {
+  // Waits until the buffer holds at least n bytes.
+  async ensure(n) {
     while (this.buffer.length < n) {
       if (this.error) throw this.error;
       if (this.ended) throw new ProxyError('the connection closed before the answer was complete');
-      await this.wait();
+      await new Promise((resolve) => this.waiters.push(resolve));
     }
+  }
+
+  async read(n) {
+    await this.ensure(n);
     const out = this.buffer.subarray(0, n);
     this.buffer = this.buffer.subarray(n);
     return out;
@@ -115,7 +125,7 @@ class Reader {
       }
       if (this.error) throw this.error;
       if (this.ended) throw new ProxyError('the connection closed in the middle of the answer');
-      await this.wait();
+      await new Promise((resolve) => this.waiters.push(resolve));
     }
   }
 
@@ -129,12 +139,14 @@ class Reader {
       }
       if (this.error) throw this.error;
       if (this.ended) throw new ProxyError('the connection closed before the answer was complete');
-      await this.wait();
+      await new Promise((resolve) => this.waiters.push(resolve));
     }
   }
 
   async rest() {
-    while (!this.ended && !this.error) await this.wait();
+    while (!this.ended && !this.error) {
+      await new Promise((resolve) => this.waiters.push(resolve));
+    }
     if (this.error) throw this.error;
     const out = this.buffer;
     this.buffer = Buffer.alloc(0);
@@ -301,7 +313,7 @@ async function peek(reader, ms) {
     timer = setTimeout(() => resolve(false), ms);
   });
   const ready = (async () => {
-    while (!reader.buffer.length && !reader.ended && !reader.error) await reader.wait();
+    while (!reader.buffer.length && !reader.ended && !reader.error) await reader.waitForData();
     return true;
   })();
   const ok = await Promise.race([ready, timeout]);
@@ -374,8 +386,10 @@ export async function tunnelRequest({ method, url, headers = {}, body = null, ti
     try {
       if (target.protocol === 'https:') {
         // The TLS layer takes over the socket; the reader must let go of it
-        // first, otherwise both would compete for the same bytes.
-        reader.detach();
+        // first, otherwise both would compete for the same bytes. The socket
+        // also has to stop flowing — a flowing socket drops everything that
+        // arrives after the handshake, and the body of the answer would
+        // never be read.
         // Keep an error listener on the raw socket: without one, a late
         // socket error would be an uncaught exception.
         socket.on('error', (err) => trace('socket error during tls', err.code || err.message));
@@ -450,12 +464,14 @@ async function readResponse(reader, { method, target, headers, body }) {
   }
   const status = Number.parseInt(parts[1], 10) || 0;
   const statusText = (parts.slice(2).join(' ') || '').trim();
+  trace('response headers', JSON.stringify(map));
 
   let payload;
   if (/^chunked$/i.test(map['transfer-encoding'] || '')) {
     const chunks = [];
     while (true) {
       const size = Number.parseInt((await reader.line()).toString('latin1').split(';')[0], 16);
+      trace('chunk size', String(size));
       if (!Number.isFinite(size) || size === 0) break;
       chunks.push(await reader.read(size));
       await reader.read(2); // trailing CRLF
