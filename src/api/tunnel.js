@@ -45,18 +45,30 @@ class Reader {
     this.waiters = [];
     this.error = null;
     this.ended = false;
-    socket.on('data', (chunk) => {
+    this.onData = (chunk) => {
       this.buffer = Buffer.concat([this.buffer, chunk]);
       this.wake();
-    });
-    socket.on('end', () => {
+    };
+    this.onEnd = () => {
       this.ended = true;
       this.wake();
-    });
-    socket.on('error', (err) => {
+    };
+    this.onError = (err) => {
       this.error = err;
       this.wake();
-    });
+    };
+    socket.on('data', this.onData);
+    socket.on('end', this.onEnd);
+    socket.on('error', this.onError);
+  }
+
+  // Hands the socket over to somebody else (the TLS layer). A socket with
+  // listeners would feed the same bytes to both of them and break the
+  // handshake.
+  detach() {
+    this.socket.removeListener('data', this.onData);
+    this.socket.removeListener('end', this.onEnd);
+    this.socket.removeListener('error', this.onError);
   }
 
   wake() {
@@ -343,6 +355,9 @@ export async function tunnelRequest({ method, url, headers = {}, body = null, ti
     let stream = socket;
     try {
       if (target.protocol === 'https:') {
+        // The TLS layer takes over the socket; the reader must let go of it
+        // first, otherwise both would compete for the same bytes.
+        reader.detach();
         stream = tls.connect({ socket, servername: target.hostname });
         await new Promise((resolve, reject) => {
           stream.once('secureConnect', resolve);
@@ -379,6 +394,10 @@ export async function tunnelRequest({ method, url, headers = {}, body = null, ti
       timeout
     );
   });
+  // Whoever loses the race must not turn into an unhandled rejection — that
+  // would take the whole studio process down with it.
+  work.catch(() => {});
+  guard.catch(() => {});
   try {
     return await Promise.race([work, guard]);
   } finally {

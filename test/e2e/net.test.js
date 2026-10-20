@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { startMockCloud, stopMockCloud, Project, startStudio, freePort } from './helpers/helpers.js';
 import { startConnectProxy, startSocks5Proxy } from './helpers/proxy.js';
 import http from 'node:http';
+import net from 'node:net';
 
 let cloud;
+let token;
 
 test.after(async () => {
   if (cloud) await stopMockCloud(cloud);
@@ -12,6 +14,7 @@ test.after(async () => {
 
 test.before(async () => {
   cloud = await startMockCloud();
+  token = cloud.mintToken();
 });
 
 const api = async (port, path, { method = 'GET', body } = {}) => {
@@ -187,6 +190,73 @@ test('a direct request works with the new http path', async () => {
   assert.equal(res.code, 0, res.out);
   assert.match(res.out, /✓ Reach: the cloud answered/);
   assert.match(res.out, /IP family: auto/);
+});
+
+test('the studio survives a proxy that never answers', async () => {
+  const port = await freePort();
+  // A proxy that accepts the connection and then says nothing: the request
+  // has to time out. The studio must stay alive and keep serving.
+  // It accepts, says nothing, and drops the connection after the request has
+  // already timed out — that late failure is what used to kill the studio.
+  const mute = net.createServer((client) => {
+    setTimeout(() => client.destroy(), 900);
+  });
+  const mutePort = await new Promise((r) => mute.listen(0, '127.0.0.1', () => r(mute.address().port)));
+  const proj = new Project(cloud, token, 'hang');
+  proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  proj.env.TGPILOT_PROXY = `socks5://127.0.0.1:${mutePort}`;
+  proj.env.TGPILOT_TIMEOUT = '300';
+  const child = await startStudio(proj, port);
+  try {
+    const first = await api(port, '/api/webhook');
+    assert.equal(first.status, 500, first.text);
+    assert.match(first.json.error, /timed out|reach the server/i);
+
+    // The studio is still there — a killed process would fail this.
+    const second = await api(port, '/api/status');
+    assert.equal(second.status, 200, second.text);
+    const third = await api(port, '/api/project');
+    assert.equal(third.status, 200, third.text);
+  } finally {
+    child.kill('SIGTERM');
+    mute.close();
+  }
+});
+
+test('HTTPS travels through a SOCKS5 proxy', async () => {
+  // A TLS server on the other side of the proxy — the case that broke when
+  // the tunnel and the TLS layer fought over the same socket.
+  const https = await import('node:https');
+  const { TEST_KEY, TEST_CERT } = await import('./helpers/tls.js');
+  const server = https.createServer({ key: TEST_KEY, cert: TEST_CERT }, (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, result: { hello: 'through the tunnel' } }));
+  });
+  const tlsPort = await new Promise((r) => server.listen(0, '127.0.0.1', () => r(server.address().port)));
+
+  const { server: proxyServer, port: proxyPort } = await startSocks5Proxy();
+  try {
+    const { tunnelRequest } = await import('../../src/api/tunnel.js');
+    const previous = process.env.TGPILOT_PROXY;
+    process.env.TGPILOT_PROXY = `socks5://127.0.0.1:${proxyPort}`;
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    try {
+      const out = await tunnelRequest({
+        method: 'GET',
+        url: `https://127.0.0.1:${tlsPort}/capabilities`,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      assert.equal(out.status, 200);
+      assert.match(String(await out.text()), /through the tunnel/);
+    } finally {
+      if (previous === undefined) delete process.env.TGPILOT_PROXY;
+      else process.env.TGPILOT_PROXY = previous;
+      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    }
+  } finally {
+    proxyServer.close();
+    server.close();
+  }
 });
 
 test('a running local proxy is discovered and named', async () => {

@@ -28,6 +28,7 @@ Commands:
   migrate         apply pending schema changes to the database
   webhook         show the bot webhook state (webhook sync to repair)
   logs [-n N]     read this tool's journal
+  ping [--probe]  check how this machine reaches the cloud (proxy, DNS, route)
   web             open the studio in a browser
   upgrade         move an old project layout under tgcloud/
 

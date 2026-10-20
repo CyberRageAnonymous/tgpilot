@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseArgs } from '../args.js';
 import { fatal, info } from '../output.js';
+import { log } from '../logs.js';
 import { findProjectRoot } from '../project/root.js';
 import { MODULE_ROOT } from '../project/layout.js';
 import { createRoutes } from '../web/routes.js';
@@ -51,6 +52,19 @@ export async function registerWeb(argv) {
 
   await new Promise((resolve) => {
     server.listen(port, host, resolve);
+  });
+
+  // The studio is a long-running process in front of a browser. A single
+  // unexpected error must never take it down: log it and keep serving.
+  process.on('unhandledRejection', (err) => {
+    log('error', 'web', 'Something went wrong in the background; the studio keeps running.', {
+      error: err?.message || String(err),
+    });
+  });
+  process.on('uncaughtException', (err) => {
+    log('error', 'web', 'Unexpected error in the studio; the studio keeps running.', {
+      error: err?.message || String(err),
+    });
   });
 
   info(`tgpilot studio → http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
