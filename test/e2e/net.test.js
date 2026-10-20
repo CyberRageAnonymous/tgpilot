@@ -78,7 +78,7 @@ test('a dead proxy is spotted before anything else is tried', async () => {
   const res = await proj.cli(['ping']);
   assert.equal(res.code, 1, res.out);
   assert.match(res.out, /✗ Proxy: nothing is listening on http:\/\/127\.0\.0\.1:9/);
-  assert.match(res.out, /Start your proxy\/VPN app/);
+  assert.match(res.out, /Hint: start the proxy\/VPN app, or correct the port/);
 });
 
 test('a failing DNS gets the DoH line before any proxy is touched', async () => {

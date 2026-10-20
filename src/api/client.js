@@ -1,8 +1,31 @@
 const PROD_URL = 'https://cloud.telegram.org';
-import { tunnelRequest, hasProxy } from './tunnel.js';
+import { tunnelRequest } from './tunnel.js';
+import { networkConfig } from '../project/network.js';
+
+// The project may carry its own server address and proxy (set in the
+// studio); the environment is the fallback. The value is cached for a
+// second so a burst of requests does not re-read the state file.
+let cache = { at: 0, value: null };
+
+function effectiveConfig() {
+  const now = Date.now();
+  if (cache.value && now - cache.at < 1000) return cache.value;
+  let value;
+  try {
+    value = networkConfig();
+  } catch {
+    value = { proxy: '', apiUrl: '' };
+  }
+  cache = { at: now, value };
+  return value;
+}
+
+export function invalidateNetworkCache() {
+  cache = { at: 0, value: null };
+}
 
 function apiBase() {
-  const override = process.env.TGPILOT_API_URL || process.env.TG_CLOUD_API_URL;
+  const override = effectiveConfig().apiUrl || process.env.TGPILOT_API_URL || process.env.TG_CLOUD_API_URL;
   return (override || PROD_URL).replace(/\/+$/, '');
 }
 
@@ -15,10 +38,12 @@ function requestTimeout() {
 
 // Runs a single cloud request, straight or through the configured proxy.
 async function doRequest({ method, url, headers, body }) {
-  if (hasProxy()) {
+  const proxy = effectiveConfig().proxy;
+  if (proxy) {
     return tunnelRequest({
       method,
       url,
+      proxy,
       headers: Object.fromEntries(Object.entries(headers).filter(([k]) => k.toLowerCase() !== 'content-length')),
       body: body === undefined ? Buffer.alloc(0) : Buffer.isBuffer(body) ? body : Buffer.from(body),
     });
@@ -99,8 +124,8 @@ export async function requestPublic(method, path) {
   return parseEnvelope(res);
 }
 
-function proxyEnvName() {
-  return process.env.TGPILOT_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.ALL_PROXY || process.env.all_proxy || '';
+function proxyName() {
+  return effectiveConfig().proxy || '';
 }
 
 async function parseEnvelope(res) {
@@ -158,7 +183,7 @@ export function serverErrorText(err) {
         : `Could not reach the server at ${base}. Check your connection (or the TGPILOT_API_URL setting).`;
       const reason = err.reason || err.cause?.code || '';
       if (reason) text += ` (${reason})`;
-      const proxy = proxyEnvName();
+      const proxy = proxyName();
       text += proxy
         ? ` The configured proxy ${proxy} also failed — is that proxy app running? Diagnose: tgpilot ping`
         : ' If telegram.org is blocked on your network (common behind filters), set TGPILOT_PROXY=http://host:port — e.g. the local port of your VPN/proxy app — and try again. Diagnose: tgpilot ping';

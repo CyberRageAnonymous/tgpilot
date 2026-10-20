@@ -13,7 +13,8 @@ import { saveStaticSnapshot, loadStaticSnapshot, scanStatic, staticDiff, formatB
 import { loadProjectConfig, configFileName } from '../project/config.js';
 import { readDisk, writeDisk, unlinkDisk, existsDisk, displayPath } from '../project/workdir.js';
 import { changeCard, changeId } from '../project/changes.js';
-import { serverErrorText } from '../api/client.js';
+import { serverErrorText, requestPublic, invalidateNetworkCache } from '../api/client.js';
+import { networkConfig, saveNetworkConfig, diagnose } from '../project/network.js';
 import { log, readLogs, clearLogs, LEVELS } from '../logs.js';
 import { moduleStarter, UPDATE_TYPES, SCHEMA_STARTER } from '../templates.js';
 import { parse } from '../json5.js';
@@ -50,6 +51,9 @@ export function createRoutes(root, uiDir) {
     ['GET /api/schema', () => handleSchemaDiff()],
     ['GET /api/logs', (body, query) => handleLogsGet(query)],
     ['DELETE /api/logs', () => handleLogsClear()],
+    ['GET /api/network', () => handleNetworkGet()],
+    ['POST /api/network', (body) => handleNetworkSave(body)],
+    ['POST /api/network/test', (body) => handleNetworkTest(body)],
   ]);
 
   return async ({ req, res }, next) => {
@@ -501,6 +505,59 @@ function handleSchemaDiff() {
   if (remote == null && local == null) return { ok: true, hasSchema: false, touched: false, diff: null };
   const diff = computeDiff(remote ?? '', local ?? '', displayPath(SCHEMA_FILE));
   return { ok: true, hasSchema: true, touched: diff !== '', diff };
+}
+
+// The network settings the studio can change at runtime: which server to
+// talk to and which proxy to use on the way there.
+async function handleNetworkGet() {
+  return { ok: true, config: networkConfig() };
+}
+
+async function handleNetworkSave(body) {
+  const proxy = body?.proxy === undefined ? undefined : String(body.proxy ?? '').trim();
+  const apiUrl = body?.apiUrl === undefined ? undefined : String(body.apiUrl ?? '').trim();
+  if (proxy !== undefined && proxy) {
+    try {
+      const parsed = new URL(proxy);
+      const scheme = parsed.protocol.replace(':', '');
+      if (!['http', 'https', 'socks5', 'socks'].includes(scheme) || !parsed.hostname || !parsed.port) {
+        throw new Error('shape');
+      }
+    } catch {
+      throw badRequest('That proxy address cannot be read. Use http://host:port or socks5://host:port.');
+    }
+  }
+  if (apiUrl !== undefined && apiUrl) {
+    try {
+      const parsed = new URL(apiUrl);
+      if (!/^https?:$/.test(parsed.protocol)) throw new Error('scheme');
+    } catch {
+      throw badRequest('That server address cannot be read. Use http://host:port or https://host.');
+    }
+  }
+  const config = saveNetworkConfig({ proxy, apiUrl });
+  invalidateNetworkCache();
+  log('info', 'network', 'Network settings changed from the studio.', {
+    proxy: config.proxy || '(none)',
+    apiUrl: config.apiUrl || '(default)',
+  });
+  return { ok: true, config };
+}
+
+async function handleNetworkTest(body) {
+  const result = await diagnose({
+    proxy: body?.proxy === undefined ? undefined : String(body.proxy ?? '').trim(),
+    apiUrl: body?.apiUrl === undefined ? undefined : String(body.apiUrl ?? '').trim(),
+  });
+  const started = Date.now();
+  try {
+    await requestPublic('GET', '/capabilities');
+    result.steps.push({ id: 'reach', ok: true, text: 'the cloud answered' });
+  } catch (err) {
+    result.steps.push({ id: 'reach', ok: false, text: serverErrorText(err), hint: err?.hint || '' });
+  }
+  result.durationMs = Date.now() - started;
+  return { ok: true, ...result };
 }
 
 function handleLogsGet(query) {

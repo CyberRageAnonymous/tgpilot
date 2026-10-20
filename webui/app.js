@@ -73,6 +73,7 @@ const SECTION_TITLES = {
   files: 'Files',
   editor: 'Editor',
   database: 'Database',
+  network: 'Network',
 };
 
 // The folder each section browses; the cloud module folders live under tgcloud/.
@@ -171,6 +172,10 @@ function wire() {
   $('btn-logs-clear').onclick = () => logsClear().catch(showError);
   $('logs-level').onchange = () => loadLogs().catch(() => {});
 
+  $('btn-network').onclick = () => openNetwork().catch(showError);
+  $('btn-network-save').onclick = () => saveNetwork().catch(showError);
+  $('btn-network-test').onclick = () => testNetwork().catch(showError);
+
   const editor = $('editor');
   editor.addEventListener('keydown', onEditorKey);
   editor.addEventListener('input', () => {
@@ -198,6 +203,67 @@ async function start() {
   await refreshStatus().catch(showError);
   loadLogs().catch(() => {});
   updateHomeSubs();
+  refreshNetworkSummary().catch(() => {});
+}
+
+// --- network -----------------------------------------------------------------
+
+async function openNetwork() {
+  const out = await GET('/api/network');
+  const config = out.config || {};
+  $('net-proxy').value = config.proxy || '';
+  $('net-apiurl').value = config.apiUrl || '';
+  $('net-result').innerHTML = '<div class="hint">run a test to see where the chain breaks</div>';
+  show('network');
+}
+
+async function saveNetwork() {
+  const proxy = $('net-proxy').value.trim();
+  const apiUrl = $('net-apiurl').value.trim();
+  const out = await POST('/api/network', { proxy, apiUrl });
+  toast(out.config.proxy ? `proxy saved: ${out.config.proxy}` : 'proxy cleared — direct connection');
+  await refreshNetworkSummary();
+  return out;
+}
+
+async function testNetwork() {
+  const proxy = $('net-proxy').value.trim();
+  const apiUrl = $('net-apiurl').value.trim();
+  $('net-result').innerHTML = '<div class="hint">testing…</div>';
+  const out = await POST('/api/network/test', { proxy, apiUrl });
+  const rows = (out.steps || [])
+    .map((step) => {
+      const mark = step.ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
+      const hint = step.hint ? `<div class="hint">${escapeHtml(step.hint)}</div>` : '';
+      return `<div class="net-step">${mark} <span>${escapeHtml(step.text)}</span>${hint}</div>`;
+    })
+    .join('');
+  $('net-result').innerHTML = rows || '<div class="hint">no answer</div>';
+  await refreshNetworkSummary();
+}
+
+// The home card tells the story in one line: are we connected, and if not,
+// what is the first thing to fix.
+async function refreshNetworkSummary() {
+  const box = $('network-summary');
+  if (!box) return;
+  try {
+    const out = await POST('/api/network/test', {});
+    const steps = out.steps || [];
+    const proxy = steps.find((s) => s.id === 'proxy');
+    const dnsStep = steps.find((s) => s.id === 'dns');
+    const reach = steps.find((s) => s.id === 'reach');
+    if (reach && reach.ok) {
+      box.innerHTML = `Connected to the cloud${out.config?.proxy ? ` through <code>${escapeHtml(out.config.proxy)}</code>` : ''} — ${escapeHtml(out.durationMs ?? 0)} ms.`;
+      return;
+    }
+    const why = (proxy && !proxy.ok) ? proxy.text : (dnsStep && !dnsStep.ok) ? dnsStep.text : (reach ? reach.text : 'the cloud did not answer');
+    box.innerHTML = `Not connected: ${escapeHtml(why)}. <button class="ghost small net-open">Open settings</button>`;
+    const btn = box.querySelector('.net-open');
+    if (btn) btn.onclick = () => openNetwork().catch(showError);
+  } catch (err) {
+    box.textContent = err.message || String(err);
+  }
 }
 
 // --- project / bot link ------------------------------------------------------

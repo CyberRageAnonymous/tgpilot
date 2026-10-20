@@ -175,6 +175,45 @@ test('linking a bot from the studio works and bad tokens are rejected', async ()
   }
 });
 
+test('the studio can set a proxy and test the connection at runtime', async () => {
+  const port = await freePort();
+  const child = await startStudio(proj, port);
+  try {
+    const before = await api(port, '/api/network');
+    assert.equal(before.status, 200, before.text);
+    assert.equal(before.json.config.proxy, '');
+
+    const bad = await api(port, '/api/network', { method: 'POST', body: { proxy: 'not a proxy' } });
+    assert.equal(bad.status, 400, bad.text);
+
+    const saved = await api(port, '/api/network', { method: 'POST', body: { proxy: 'socks5://127.0.0.1:10809' } });
+    assert.equal(saved.status, 200, saved.text);
+    assert.equal(saved.json.config.proxy, 'socks5://127.0.0.1:10809');
+    assert.equal(saved.json.config.proxySource, 'project');
+
+    const test = await api(port, '/api/network/test', { method: 'POST', body: {} });
+    assert.equal(test.status, 200, test.text);
+    const steps = test.json.steps.map((s) => s.id);
+    assert.ok(steps.includes('proxy'), steps.join(','));
+    assert.ok(steps.includes('dns'), steps.join(','));
+    assert.ok(steps.includes('reach'), steps.join(','));
+    const proxyStep = test.json.steps.find((s) => s.id === 'proxy');
+    assert.equal(proxyStep.ok, false);
+    assert.match(proxyStep.text, /nothing is listening/);
+
+    // the saved proxy is the one the studio now uses
+    const hook = await api(port, '/api/webhook');
+    assert.equal(hook.status, 500, hook.text);
+    assert.match(hook.json.error, /socks5:\/\/127\.0\.0\.1:10809/);
+
+    // and it can be cleared again
+    const cleared = await api(port, '/api/network', { method: 'POST', body: { proxy: '' } });
+    assert.equal(cleared.json.config.proxy, '');
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
+
 test('web refuses to serve anything that is not a project', async () => {
   const bare = new Project(cloud, null, 'bare');
   const r = await bare.cli(['web']);

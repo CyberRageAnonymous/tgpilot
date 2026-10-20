@@ -106,6 +106,15 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head"><h2>Network</h2>
+        <button id="btn-network" class="ghost small">Settings</button>
+      </div>
+      <p class="about-text" id="network-summary">
+        Checking how this machine reaches the cloud…
+      </p>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><h2>About</h2></div>
       <p class="about-text">
         <strong>tgpilot</strong> is a free, open-source tool for Telegram Serverless bots:
@@ -127,6 +136,42 @@
           <span class="k">X (Twitter)</span><span class="v">x.com/CyberRageAnon</span>
         </a>
       </div>
+    </div>
+  </section>
+
+  <!-- Network -->
+  <section id="view-network" class="view" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>How this machine reaches the cloud</h2></div>
+      <p class="about-text">
+        If <code>cloud.telegram.org</code> is blocked on this network, send the traffic
+        through a proxy. Both HTTP and SOCKS5 proxies work — the kind is detected
+        automatically. Leave the field empty to connect directly.
+      </p>
+      <div class="stack">
+        <label class="field">
+          <span class="field-label">Proxy</span>
+          <input id="net-proxy" type="text" spellcheck="false" placeholder="socks5://127.0.0.1:10809">
+        </label>
+        <label class="field">
+          <span class="field-label">Server (optional)</span>
+          <input id="net-apiurl" type="text" spellcheck="false" placeholder="https://cloud.telegram.org">
+        </label>
+        <div class="stack-row">
+          <button id="btn-network-save" class="primary small">Save</button>
+          <button id="btn-network-test" class="ghost small">Test connection</button>
+        </div>
+        <div id="net-result" class="status-box"><div class="hint">run a test to see where the chain breaks</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Remote servers</h2></div>
+      <p class="about-text">
+        On a remote machine there is usually no proxy running on it. Either start one
+        there, or tunnel your own machine's proxy through SSH:
+        <code>ssh -R 10809:127.0.0.1:10809 user@server</code> — then use
+        <code>socks5://127.0.0.1:10809</code> here.
+      </p>
     </div>
   </section>
 

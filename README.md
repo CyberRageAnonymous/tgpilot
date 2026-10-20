@@ -150,6 +150,17 @@ tgpilot ping                       # ✓ Reach: the cloud answered in 210 ms
 Both HTTP CONNECT proxies and SOCKS5 proxies work; the kind is detected on
 its own, so the address of your local proxy port is enough.
 
+The studio can do the same without touching the environment: the **Network**
+card on the home page stores a proxy (or another server address) in the
+project and tests the chain with one click.
+
+On a remote machine there is usually no proxy running on it. Either start one
+there, or tunnel your own machine's proxy through SSH:
+
+```bash
+ssh -R 10809:127.0.0.1:10809 user@server   # then use socks5://127.0.0.1:10809
+```
+
 The journal of everything tgpilot did lives in `.tgpilot/logs/`; read it with
 `tgpilot logs`, filter with `-n`, `--level`, `--scope`, and `--clear` to wipe.
 

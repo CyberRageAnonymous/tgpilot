@@ -317,18 +317,18 @@ async function openTunnel(proxy, target, scheme) {
 
 // One plain HTTP/1.1 request through the tunnel. Resolves with a
 // fetch-compatible { status, statusText, text() }.
-export async function tunnelRequest({ method, url, headers = {}, body = null, timeout = requestTimeout() }) {
-  let proxy;
+export async function tunnelRequest({ method, url, headers = {}, body = null, timeout = requestTimeout(), proxy: proxyOption = proxyFromEnv() }) {
+  let proxyUrl;
   let scheme;
   try {
-    proxy = new URL(proxyFromEnv());
-    scheme = proxy.protocol.replace(':', '');
+    proxyUrl = new URL(proxyOption || proxyFromEnv());
+    scheme = proxyUrl.protocol.replace(':', '');
     if (scheme === 'socks') scheme = 'socks5';
     if (!['http', 'https', 'socks5'].includes(scheme)) throw new Error('scheme');
-    if (!proxy.hostname) throw new Error('host');
+    if (!proxyUrl.hostname) throw new Error('host');
   } catch {
     throw new ProxyError(
-      `TGPILOT_PROXY is not a usable proxy address (${proxyFromEnv() || 'empty'})`,
+      `TGPILOT_PROXY is not a usable proxy address (${proxyOption || proxyFromEnv() || 'empty'})`,
       'expected http://host:port or socks5://host:port'
     );
   }
@@ -339,7 +339,7 @@ export async function tunnelRequest({ method, url, headers = {}, body = null, ti
   }
 
   const work = (async () => {
-    const { socket, reader } = await openTunnel(proxy, target, scheme);
+    const { socket, reader } = await openTunnel(proxyUrl, target, scheme);
     let stream = socket;
     try {
       if (target.protocol === 'https:') {
