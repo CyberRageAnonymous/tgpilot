@@ -2,6 +2,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import { loadState, saveState } from './state.js';
 import { proxyFromEnv } from '../api/tunnel.js';
+import { probeAddress, isHijacked, familyFromEnv } from '../api/http.js';
 
 // Where the tool talks to, and how it gets there. The studio can change this
 // at runtime (a saved project setting), the environment can override it for
@@ -24,6 +25,7 @@ function stored() {
   return {
     proxy: typeof net_.proxy === 'string' ? net_.proxy : null,
     apiUrl: typeof net_.apiUrl === 'string' ? net_.apiUrl : null,
+    family: net_.family === 4 || net_.family === 6 ? net_.family : null,
   };
 }
 
@@ -32,31 +34,34 @@ export function networkConfig() {
   const saved = stored();
   const envProxy = ENV_PROXY();
   const envApi = ENV_API_URL();
+  const envFamily = familyFromEnv();
   return {
     proxy: saved.proxy !== null ? saved.proxy : envProxy,
     apiUrl: saved.apiUrl !== null ? saved.apiUrl : envApi,
+    family: saved.family !== null ? saved.family : envFamily,
     proxySource: saved.proxy !== null ? 'project' : envProxy ? 'environment' : 'none',
     apiUrlSource: saved.apiUrl !== null ? 'project' : envApi ? 'environment' : 'default',
+    familySource: saved.family !== null ? 'project' : envFamily ? 'environment' : 'auto',
   };
 }
 
-export function saveNetworkConfig({ proxy, apiUrl }) {
+export function saveNetworkConfig({ proxy, apiUrl, family } = {}) {
   const state = loadState();
+  const previous = state.network && typeof state.network === 'object' ? state.network : {};
   state.network = {
-    proxy: typeof proxy === 'string' ? proxy.trim() : null,
-    apiUrl: typeof apiUrl === 'string' ? apiUrl.trim() : null,
+    proxy: proxy === undefined ? (typeof previous.proxy === 'string' ? previous.proxy : null) : proxy.trim(),
+    apiUrl: apiUrl === undefined ? (typeof previous.apiUrl === 'string' ? previous.apiUrl : null) : apiUrl.trim(),
+    family:
+      family === undefined
+        ? previous.family === 4 || previous.family === 6
+          ? previous.family
+          : null
+        : family === 4 || family === 6
+          ? Number(family)
+          : null,
   };
   saveState(state);
   return networkConfig();
-}
-
-function isPrivate(ip) {
-  // Loopback is a normal answer for a local server; the others point at a
-  // router or a sinkhole, never at a public cloud.
-  if (ip.startsWith('10.') || ip.startsWith('192.168.')) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
-  if (ip.startsWith('169.254.')) return true;
-  return false;
 }
 
 // Is anything listening on the proxy port? This is the most common failure,
@@ -83,7 +88,7 @@ export async function proxyPortAlive(proxy) {
 
 // The same checks the CLI prints, as data, so the studio can show the same
 // story in the browser.
-export async function diagnose({ apiUrl, proxy } = {}) {
+export async function diagnose({ apiUrl, proxy, deep = true } = {}) {
   const config = networkConfig();
   const base = apiUrl || config.apiUrl || 'https://cloud.telegram.org';
   const proxyValue = proxy === undefined ? config.proxy : proxy;
@@ -112,15 +117,6 @@ export async function diagnose({ apiUrl, proxy } = {}) {
     const target = new URL(base);
     addresses = (await dns.lookup(target.hostname, { all: true })).map((a) => a.address);
     steps.push({ id: 'dns', ok: true, text: `DNS: ${target.hostname} resolves to ${addresses.join(', ')}` });
-    const privateOnes = addresses.filter((ip) => isPrivate(ip));
-    if (privateOnes.length) {
-      steps.push({
-        id: 'dns-filtered',
-        ok: false,
-        text: `DNS: ${privateOnes.join(', ')} is a private address — that usually means a filtered or hijacked DNS answer`,
-        hint: 'a direct connection will not get through; use a proxy',
-      });
-    }
   } catch (err) {
     steps.push({
       id: 'dns',
@@ -128,6 +124,40 @@ export async function diagnose({ apiUrl, proxy } = {}) {
       text: `DNS: ${new URL(base).hostname} — ${err.code || err.message}`,
       hint: 'the domain does not resolve; a proxy that resolves it for you is the way out',
     });
+  }
+
+  if (deep && addresses.length) {
+    const target = new URL(base);
+    const port = Number(target.port) || (target.protocol === 'https:' ? 443 : 80);
+    const v4 = addresses.find((ip) => ip.includes('.') && !ip.includes(':'));
+    const v6 = addresses.find((ip) => ip.includes(':'));
+    const hijacked = v4 && isHijacked(v4);
+    if (hijacked) {
+      steps.push({
+        id: 'ipv4',
+        ok: false,
+        text: `IPv4: ${v4} is a private address — a hijacked DNS answer, this route can never work`,
+        hint: 'use a proxy, or force the other family with TGPILOT_IP_FAMILY=6',
+      });
+    }
+    if (v6) {
+      const probe = await probeAddress({ host: v6, family: 6, port, timeout: 4000 });
+      steps.push({
+        id: 'ipv6',
+        ok: probe.ok,
+        text: probe.ok ? `IPv6: ${v6} answers — this route works` : `IPv6: ${v6} — ${probe.reason}`,
+        hint: probe.ok ? 'force it with TGPILOT_IP_FAMILY=6' : '',
+      });
+    }
+    if (!hijacked && v4) {
+      const probe = await probeAddress({ host: v4, family: 4, port, timeout: 4000 });
+      steps.push({
+        id: 'ipv4',
+        ok: probe.ok,
+        text: probe.ok ? `IPv4: ${v4} answers — this route works` : `IPv4: ${v4} — ${probe.reason}`,
+        hint: '',
+      });
+    }
   }
 
   return { config: { ...networkConfig(), proxy: proxyValue, apiUrl: base }, steps };

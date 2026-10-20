@@ -516,6 +516,18 @@ async function handleNetworkGet() {
 async function handleNetworkSave(body) {
   const proxy = body?.proxy === undefined ? undefined : String(body.proxy ?? '').trim();
   const apiUrl = body?.apiUrl === undefined ? undefined : String(body.apiUrl ?? '').trim();
+  const familyRaw = body?.family === undefined ? undefined : String(body.family ?? '').trim();
+  const family =
+    familyRaw === undefined
+      ? undefined
+      : familyRaw === '4'
+        ? 4
+        : familyRaw === '6'
+          ? 6
+          : familyRaw === '' || familyRaw === 'auto'
+            ? 0
+            : null;
+  if (family === null) throw badRequest('The IP family must be auto, 4 or 6.');
   if (proxy !== undefined && proxy) {
     try {
       const parsed = new URL(proxy);
@@ -535,7 +547,7 @@ async function handleNetworkSave(body) {
       throw badRequest('That server address cannot be read. Use http://host:port or https://host.');
     }
   }
-  const config = saveNetworkConfig({ proxy, apiUrl });
+  const config = saveNetworkConfig({ proxy, apiUrl, family: family === undefined ? undefined : family || null });
   invalidateNetworkCache();
   log('info', 'network', 'Network settings changed from the studio.', {
     proxy: config.proxy || '(none)',

@@ -213,6 +213,7 @@ async function openNetwork() {
   const config = out.config || {};
   $('net-proxy').value = config.proxy || '';
   $('net-apiurl').value = config.apiUrl || '';
+  $('net-family').value = config.family === 4 ? '4' : config.family === 6 ? '6' : 'auto';
   $('net-result').innerHTML = '<div class="hint">run a test to see where the chain breaks</div>';
   show('network');
 }
@@ -220,7 +221,8 @@ async function openNetwork() {
 async function saveNetwork() {
   const proxy = $('net-proxy').value.trim();
   const apiUrl = $('net-apiurl').value.trim();
-  const out = await POST('/api/network', { proxy, apiUrl });
+  const family = $('net-family').value;
+  const out = await POST('/api/network', { proxy, apiUrl, family });
   toast(out.config.proxy ? `proxy saved: ${out.config.proxy}` : 'proxy cleared — direct connection');
   await refreshNetworkSummary();
   return out;

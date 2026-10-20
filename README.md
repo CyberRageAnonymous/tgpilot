@@ -134,6 +134,7 @@ sees it. `--port` or `TGPILOT_WEB_PORT` changes the port.
 | `TGPILOT_PROXY` | send every cloud request through a proxy: `http://host:port` or `socks5://host:port` (credentials allowed: `socks5://user:pass@host:port`) |
 | `HTTPS_PROXY` / `ALL_PROXY` | used as a fallback when `TGPILOT_PROXY` is not set |
 | `TGPILOT_TIMEOUT` | how long a cloud request may take, in milliseconds (default 20000) |
+| `TGPILOT_IP_FAMILY` | force the IP family for cloud requests: `4` or `6` — useful when a filtered DNS hijacks IPv4 but IPv6 still works |
 
 ### Behind a filter or a VPN
 
@@ -160,6 +161,14 @@ there, or tunnel your own machine's proxy through SSH:
 ```bash
 ssh -R 10809:127.0.0.1:10809 user@server   # then use socks5://127.0.0.1:10809
 ```
+
+### Hijacked DNS
+
+Some networks answer with a private address (`10.x`, `192.168.x`) where a
+public one belongs — the DNS was hijacked, and that route can never work.
+`tgpilot ping` says so and checks the other family as well: when the IPv6
+answer is genuine it is used automatically, and `TGPILOT_IP_FAMILY=6` (or the
+**IP family** field in the studio) forces it.
 
 The journal of everything tgpilot did lives in `.tgpilot/logs/`; read it with
 `tgpilot logs`, filter with `-n`, `--level`, `--scope`, and `--clear` to wipe.

@@ -1,5 +1,6 @@
 const PROD_URL = 'https://cloud.telegram.org';
 import { tunnelRequest } from './tunnel.js';
+import { directRequest, familyFromEnv, preferredFamily } from './http.js';
 import { networkConfig } from '../project/network.js';
 
 // The project may carry its own server address and proxy (set in the
@@ -48,11 +49,15 @@ async function doRequest({ method, url, headers, body }) {
       body: body === undefined ? Buffer.alloc(0) : Buffer.isBuffer(body) ? body : Buffer.from(body),
     });
   }
-  return fetch(url, {
+  const target = new URL(url);
+  const family = effectiveConfig().family || familyFromEnv() || (await preferredFamily(target.hostname));
+  return directRequest({
     method,
+    url,
     headers,
     body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : Buffer.from(body),
-    signal: AbortSignal.timeout(requestTimeout()),
+    family,
+    timeout: requestTimeout(),
   });
 }
 

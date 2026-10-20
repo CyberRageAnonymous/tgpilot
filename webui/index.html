@@ -157,6 +157,14 @@
           <span class="field-label">Server (optional)</span>
           <input id="net-apiurl" type="text" spellcheck="false" placeholder="https://cloud.telegram.org">
         </label>
+        <label class="field">
+          <span class="field-label">IP family</span>
+          <select id="net-family" class="select">
+            <option value="auto">auto — try both, prefer the one that works</option>
+            <option value="4">IPv4 only</option>
+            <option value="6">IPv6 only (often the way out when IPv4 is hijacked)</option>
+          </select>
+        </label>
         <div class="stack-row">
           <button id="btn-network-save" class="primary small">Save</button>
           <button id="btn-network-test" class="ghost small">Test connection</button>
