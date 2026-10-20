@@ -28,6 +28,16 @@ function requestTimeout() {
   return Number(process.env.TGPILOT_TIMEOUT) || 20000;
 }
 
+function debugOn() {
+  return process.env.TGPILOT_DEBUG === '1' || process.env.TGCLOUD_DEBUG === '1';
+}
+
+// Stage-by-stage trace, so a failure can be located without guessing.
+function trace(stage, extra) {
+  if (!debugOn()) return;
+  console.error(`[debug] tunnel: ${stage}${extra ? ` — ${extra}` : ''}`);
+}
+
 export class ProxyError extends Error {
   constructor(message, hint) {
     super(message);
@@ -204,6 +214,7 @@ async function socksHandshake(reader, proxy, target, greeting) {
   );
 
   const answer = await reader.read(4);
+  trace('socks5 reply', `code ${answer[1]}`);
   if (answer[1] !== 0x00) {
     const reasons = {
       1: 'the proxy refused the connection (general failure)',
@@ -261,6 +272,9 @@ async function connectProxy(proxy, scheme) {
   const proxyPort = Number(proxy.port) || (proxy.protocol === 'https:' ? 443 : scheme === 'socks5' ? 1080 : 80);
   const socket = net.connect({ host: proxy.hostname, port: proxyPort });
   socket.setNoDelay(true);
+  // A socket error after the tunnel is up must never take the process down.
+  socket.on('error', (err) => trace('socket error', err.code || err.message));
+  trace('connecting to the proxy', `${proxy.hostname}:${proxyPort}`);
   await new Promise((resolve, reject) => {
     const onError = (err) =>
       reject(
@@ -302,11 +316,14 @@ async function openTunnel(proxy, target, scheme) {
   const socket = await connectProxy(proxy, scheme);
   const reader = new Reader(socket);
 
+  trace('proxy connected');
   const greeting = await peek(reader, 1200);
+  trace('proxy greeting', greeting === null ? 'none (http proxy?)' : `0x${greeting.toString(16)}`);
   if (greeting === 0x05) {
     await reader.read(1); // version byte, already peeked
     const count = (await reader.read(1))[0];
     const methods = count ? await reader.read(count) : Buffer.alloc(0);
+    trace('socks5 handshake');
     await socksHandshake(reader, proxy, target, Buffer.concat([Buffer.from([0x05, count]), methods]));
     return { socket, reader };
   }
@@ -351,6 +368,7 @@ export async function tunnelRequest({ method, url, headers = {}, body = null, ti
   }
 
   const work = (async () => {
+    trace('request', `${method} ${target.href} via ${scheme}`);
     const { socket, reader } = await openTunnel(proxyUrl, target, scheme);
     let stream = socket;
     try {
@@ -358,6 +376,10 @@ export async function tunnelRequest({ method, url, headers = {}, body = null, ti
         // The TLS layer takes over the socket; the reader must let go of it
         // first, otherwise both would compete for the same bytes.
         reader.detach();
+        // Keep an error listener on the raw socket: without one, a late
+        // socket error would be an uncaught exception.
+        socket.on('error', (err) => trace('socket error during tls', err.code || err.message));
+        trace('tls handshake', target.hostname);
         stream = tls.connect({ socket, servername: target.hostname });
         await new Promise((resolve, reject) => {
           stream.once('secureConnect', resolve);
@@ -365,6 +387,7 @@ export async function tunnelRequest({ method, url, headers = {}, body = null, ti
             reject(new ProxyError(`the TLS handshake with ${target.host} failed (${err.code || err.message})`))
           );
         });
+        trace('tls ready');
         return await readResponse(new Reader(stream), { method, target, headers, body });
       }
       return await readResponse(reader, { method, target, headers, body });
@@ -416,6 +439,7 @@ async function readResponse(reader, { method, target, headers, body }) {
   reader.socket.write(Buffer.concat([Buffer.from(head, 'utf8'), body || Buffer.alloc(0)]));
 
   const headBuf = await reader.head();
+  trace('response head', headBuf.toString('latin1').split('\r\n')[0]);
   const headText = headBuf.toString('latin1');
   const lines = headText.split('\r\n');
   const parts = lines[0].split(' ');
