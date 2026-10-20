@@ -153,6 +153,18 @@ tgpilot ping                       # ✓ Reach: the cloud answered in 210 ms
 Both HTTP CONNECT proxies and SOCKS5 proxies work; the kind is detected on
 its own, so the address of your local proxy port is enough.
 
+You do not have to remember the port: `tgpilot ping` looks for a proxy that
+is already running on this machine (1080, 10808, 10809, 7890, 8080, …),
+names it and tells you what to set:
+
+```
+✓ Local proxy found: socks5://127.0.0.1:10808
+  Hint: use it with TGPILOT_PROXY=socks5://127.0.0.1:10808
+```
+
+The studio offers the same proxy with one click ("use socks5://…") in the
+Network card.
+
 The studio can do the same without touching the environment: the **Network**
 card on the home page stores a proxy (or another server address) in the
 project and tests the chain with one click.

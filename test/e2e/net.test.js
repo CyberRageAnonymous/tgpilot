@@ -189,6 +189,21 @@ test('a direct request works with the new http path', async () => {
   assert.match(res.out, /IP family: auto/);
 });
 
+test('a running local proxy is discovered and named', async () => {
+  const { server, port } = await startSocks5Proxy();
+  try {
+    const proj = project('discover');
+    // the scanner only looks at the usual ports; point it at the test one
+    proj.env.TGPILOT_PROXY_PORTS = String(port);
+    const res = await proj.cli(['ping']);
+    assert.equal(res.code, 0, res.out);
+    assert.match(res.out, /Local proxy found: socks5:\/\/127\.0\.0\.1:\d+/);
+    assert.match(res.out, /TGPILOT_PROXY=socks5:\/\/127\.0\.0\.1:\d+/);
+  } finally {
+    server.close();
+  }
+});
+
 test('without proxy envs, behavior is identical to the direct path', async () => {
   const proj = project('direct');
   const res = await proj.cli(['ping']);

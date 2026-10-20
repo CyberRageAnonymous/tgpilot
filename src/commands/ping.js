@@ -25,7 +25,7 @@ export async function registerPing(argv = []) {
 
   for (const step of steps) {
     console.log(`  ${step.ok ? '✓' : '✗'} ${step.text}`);
-    if (!step.ok && step.hint) console.log(`    Hint: ${step.hint}`);
+    if (step.hint) console.log(`    Hint: ${step.hint}`);
   }
 
   try {

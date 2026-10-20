@@ -92,6 +92,55 @@ export async function proxyPortAlive(proxy) {
   });
 }
 
+// Local proxy ports that the usual clients open. Finding one is the
+// fastest way out of a filtered network — and the user usually does not
+// remember the number.
+const DEFAULT_PROXY_PORTS = [1080, 10808, 10809, 1081, 7890, 7891, 7897, 8080, 8118, 20170, 2080];
+
+function candidatePorts() {
+  const raw = String(process.env.TGPILOT_PROXY_PORTS || '').trim();
+  if (!raw) return DEFAULT_PROXY_PORTS;
+  const ports = raw
+    .split(',')
+    .map((part) => Number(part.trim()))
+    .filter((port) => Number.isInteger(port) && port > 0 && port < 65536);
+  return ports.length ? ports : DEFAULT_PROXY_PORTS;
+}
+
+// A SOCKS5 server greets with 0x05 as soon as you connect; an HTTP proxy
+// stays silent until it gets a request. That difference is enough to tell
+// the two apart.
+function classifyPort(port, host = '127.0.0.1') {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    let first = null;
+    const done = (kind) => {
+      try {
+        socket.destroy();
+      } catch {
+        /* already gone */
+      }
+      resolve(kind);
+    };
+    socket.setTimeout(600, () => done(first === 0x05 ? 'socks5' : 'http'));
+    socket.once('data', (chunk) => {
+      first = chunk[0];
+      done(first === 0x05 ? 'socks5' : 'http');
+    });
+    socket.once('connect', () => socket.write(Buffer.from([0x05, 0x01, 0x00])));
+    socket.once('error', () => done(null));
+  });
+}
+
+export async function detectLocalProxies() {
+  const found = [];
+  for (const port of candidatePorts()) {
+    const kind = await classifyPort(port);
+    if (kind) found.push({ host: '127.0.0.1', port, kind });
+  }
+  return found;
+}
+
 // The same checks the CLI prints, as data, so the studio can show the same
 // story in the browser.
 //
@@ -121,6 +170,19 @@ export async function diagnose({ apiUrl, proxy, deep = true, probe = false } = {
           ? ''
           : 'start the proxy/VPN app, or correct the port — socks5://host:port and http://host:port both work',
     });
+  } else if (deep) {
+    // No proxy configured: a local one is often running already.
+    const local = await detectLocalProxies();
+    if (local.length) {
+      const first = local[0];
+      const others = local.slice(1).map((p) => `${p.kind}://127.0.0.1:${p.port}`);
+      steps.push({
+        id: 'local-proxy',
+        ok: true,
+        text: `Local proxy found: ${first.kind}://${first.host}:${first.port}${others.length ? ` (also ${others.join(', ')})` : ''}`,
+        hint: `use it with TGPILOT_PROXY=${first.kind}://${first.host}:${first.port}`,
+      });
+    }
   }
 
   let addresses = [];

@@ -235,6 +235,10 @@ async function testNetwork() {
   const apiUrl = $('net-apiurl').value.trim();
   $('net-result').innerHTML = '<div class="hint">testing…</div>';
   const out = await POST('/api/network/test', { proxy, apiUrl, probe: $('net-probe').checked });
+  const localStep = (out.steps || []).find((s) => s.id === 'local-proxy');
+  const useButton = localStep
+    ? `<div><button class="ghost small net-use">use ${escapeHtml(localStep.text.replace('Local proxy found: ', ''))}</button></div>`
+    : '';
   const rows = (out.steps || [])
     .map((step) => {
       const mark = step.ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
@@ -242,7 +246,17 @@ async function testNetwork() {
       return `<div class="net-step">${mark} <span>${escapeHtml(step.text)}</span>${hint}</div>`;
     })
     .join('');
-  $('net-result').innerHTML = rows || '<div class="hint">no answer</div>';
+  $('net-result').innerHTML = rows + useButton;
+  const useBtn = $('net-result').querySelector('.net-use');
+  if (useBtn) {
+    useBtn.onclick = () => {
+      const found = /socks5:\/\/[^\s]+|http:\/\/[^\s]+/.exec(localStep.text);
+      if (!found) return;
+      $('net-proxy').value = found[0];
+      saveNetwork().catch(showError);
+    };
+  }
+  if (!rows) $('net-result').innerHTML = '<div class="hint">no answer</div>';
   await refreshNetworkSummary();
 }
 
