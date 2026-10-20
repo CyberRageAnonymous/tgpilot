@@ -94,3 +94,55 @@ export function saveCredentials(token) {
 export function deleteCredentials() {
   if (fs.existsSync(CREDENTIALS_FILE)) fs.unlinkSync(CREDENTIALS_FILE);
 }
+
+// --- profiles ----------------------------------------------------------------
+// A project can be linked to more than one bot: a staging copy next to the
+// production one, a second bot for experiments. The profiles live in their
+// own file; the old single-token file stays the "default" profile.
+
+const PROFILES_FILE = path.join(STATE_DIR, 'profiles.json');
+
+export const DEFAULT_PROFILE = 'default';
+
+function emptyProfiles() {
+  return { active: DEFAULT_PROFILE, profiles: {} };
+}
+
+export function loadProfiles() {
+  let saved = null;
+  if (fs.existsSync(PROFILES_FILE)) {
+    try {
+      saved = JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf-8'));
+    } catch {
+      saved = null;
+    }
+  }
+  const profiles = saved && typeof saved.profiles === 'object' && saved.profiles ? saved.profiles : {};
+  const legacy = loadCredentials();
+  if (legacy?.token && !profiles[DEFAULT_PROFILE]) {
+    profiles[DEFAULT_PROFILE] = { token: legacy.token, label: '' };
+  }
+  const active = saved?.active && profiles[saved.active] ? saved.active : profiles[DEFAULT_PROFILE] ? DEFAULT_PROFILE : Object.keys(profiles)[0] || null;
+  return { active, profiles };
+}
+
+export function saveProfiles(data) {
+  ensureStateDir();
+  const payload = {
+    active: data.active || null,
+    profiles: data.profiles || {},
+  };
+  fs.writeFileSync(PROFILES_FILE, JSON.stringify(payload, null, 2) + '\n', { mode: 0o600 });
+  try { fs.chmodSync(PROFILES_FILE, 0o600); } catch { /* Windows has no bits */ }
+  // Keep the single-token file in sync with the default profile, so older
+  // tools and scripts still find a token where they expect it.
+  if (payload.profiles[DEFAULT_PROFILE]?.token) {
+    saveCredentials(payload.profiles[DEFAULT_PROFILE].token);
+  } else if (!payload.profiles[DEFAULT_PROFILE]) {
+    deleteCredentials();
+  }
+}
+
+export function profileNames() {
+  return loadProfiles();
+}

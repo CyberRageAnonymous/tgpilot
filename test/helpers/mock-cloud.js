@@ -128,6 +128,22 @@ export function createMockCloud() {
 
       if (apiPath === '/deploy') {
         const { expected_revision, manifest, changed_sources } = body;
+        // A module that carries the marker fails to compile, the way a real
+        // cloud refuses broken code: with the file and the line.
+        for (const [name, content] of Object.entries(changed_sources || {})) {
+          if (typeof content === 'string' && content.includes('__COMPILE_ERROR__')) {
+            const line = content.split('\n').findIndex((l) => l.includes('__COMPILE_ERROR__')) + 1;
+            return err(res, 400, 'Compilation failed', {
+              error_type: 'COMPILE_ERROR',
+              parameters: {
+                module: name,
+                path: `tgcloud/${name}`,
+                line,
+                reason: 'Unexpected token in the module body',
+              },
+            });
+          }
+        }
         if (expected_revision != null && expected_revision !== b.revision && expected_revision !== 0) {
           return err(res, 409, 'Revision mismatch', {
             error_type: 'REVISION_MISMATCH',

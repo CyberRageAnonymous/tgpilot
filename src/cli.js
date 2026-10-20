@@ -28,7 +28,11 @@ Commands:
   migrate         apply pending schema changes to the database
   webhook         show the bot webhook state (webhook sync to repair)
   logs [-n N]     read this tool's journal
+  profiles        the bots this folder is linked to (--use <name> to switch)
   ping [--probe]  check how this machine reaches the cloud (proxy, DNS, route)
+  backup [--label L]  save a copy of the project you can roll back to
+  backups         list the saved copies
+  restore <id>    put a saved copy back (the current state is saved first)
   web             open the studio in a browser
   upgrade         move an old project layout under tgcloud/
 
@@ -64,6 +68,10 @@ export async function main(argv) {
     case 'logout': {
       const { registerAuth } = await import('./commands/auth.js');
       return registerAuth(first, rest);
+    }
+    case 'profiles': {
+      const { registerProfiles } = await import('./commands/auth.js');
+      return registerProfiles(rest);
     }
     case 'status': {
       const { registerStatus } = await import('./commands/status.js');
@@ -112,6 +120,18 @@ export async function main(argv) {
     case 'upgrade': {
       const { registerUpgrade } = await import('./commands/upgrade.js');
       return registerUpgrade(rest);
+    }
+    case 'backup': {
+      const { registerBackup } = await import('./commands/backup.js');
+      return registerBackup(rest);
+    }
+    case 'backups': {
+      const { registerBackups } = await import('./commands/backup.js');
+      return registerBackups(rest);
+    }
+    case 'restore': {
+      const { registerRestore } = await import('./commands/backup.js');
+      return registerRestore(rest);
     }
     case 'ping': {
       const { registerPing } = await import('./commands/ping.js');

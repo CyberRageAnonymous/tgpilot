@@ -4,7 +4,7 @@ import { createProjectFs } from './projectfs.js';
 import { syncCapabilities, moduleDirs, runnableDirs, scaffoldEntries, findDisallowedModules } from '../project/layout.js';
 import { scanFiles, findStrayFiles } from '../project/scanner.js';
 import { localDiff } from '../project/diff.js';
-import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot } from '../project/credentials.js';
+import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot, listProfiles, activeProfile, useProfile, saveProfileToken, removeProfile } from '../project/credentials.js';
 import { planPush, makeStaticPlan, settleRevision, sendDeploy, absorbResponse, isRevisionMismatch } from '../project/deploy.js';
 import { runFunction, getWebhook, syncWebhook, getMigrationStatus, applyMigration, getFiles } from '../api/endpoints.js';
 import { replaceSnapshot, readSnapshotFile, snapshotExists, pathToModule } from '../project/snapshot.js';
@@ -15,6 +15,7 @@ import { readDisk, writeDisk, unlinkDisk, existsDisk, displayPath } from '../pro
 import { changeCard, changeId } from '../project/changes.js';
 import { serverErrorText, requestPublic, invalidateNetworkCache } from '../api/client.js';
 import { networkConfig, saveNetworkConfig, diagnose } from '../project/network.js';
+import { createBackup, listBackups, restoreBackup, removeBackup } from '../project/backup.js';
 import { log, readLogs, clearLogs, LEVELS } from '../logs.js';
 import { moduleStarter, UPDATE_TYPES, SCHEMA_STARTER } from '../templates.js';
 import { parse } from '../json5.js';
@@ -51,6 +52,14 @@ export function createRoutes(root, uiDir) {
     ['GET /api/schema', () => handleSchemaDiff()],
     ['GET /api/logs', (body, query) => handleLogsGet(query)],
     ['DELETE /api/logs', () => handleLogsClear()],
+    ['GET /api/profiles', () => handleProfilesGet()],
+    ['POST /api/profiles/use', (body) => handleProfileUse(body)],
+    ['POST /api/profiles', (body) => handleProfileLink(body)],
+    ['DELETE /api/profiles', (body) => handleProfileDelete(body)],
+    ['GET /api/backups', () => handleBackupsGet(project)],
+    ['POST /api/backups', (body) => handleBackupCreate(project, body)],
+    ['POST /api/backups/restore', (body) => handleBackupRestore(project, body)],
+    ['DELETE /api/backups', (body) => handleBackupDelete(project, body)],
     ['GET /api/network', () => handleNetworkGet()],
     ['POST /api/network', (body) => handleNetworkSave(body)],
     ['POST /api/network/test', (body) => handleNetworkTest(body)],
@@ -86,11 +95,14 @@ export function createRoutes(root, uiDir) {
         });
       } else {
         // Raw undici errors would surface as just "fetch failed" in the
-        // browser; serverErrorText turns outages into a human sentence.
+        // browser; serverErrorText turns outages into a human sentence. The
+        // details carry the file and the line, so the studio can point at
+        // the spot that failed.
         send(res, err.status || 500, {
           ok: false,
           error: serverErrorText(err),
           kind: err.kind || err.type || 'error',
+          details: errorDetails(err),
         });
       }
     }
@@ -106,6 +118,50 @@ function send(res, status, out) {
 
 function fail(res, status, message, kind) {
   send(res, status, { ok: false, error: message, kind: kind || 'error' });
+}
+
+// The cloud answers a failed deploy with more than a sentence: which module
+// failed, on which line and why. This digs those out of the answer so the
+// studio can point at the spot.
+function errorDetails(err) {
+  const parameters = err?.parameters && typeof err.parameters === 'object' ? err.parameters : {};
+  const pick = (...keys) => {
+    for (const key of keys) {
+      const value = parameters[key];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return null;
+  };
+
+  const module = pick('module', 'module_name', 'handler', 'function');
+  const path = pick('path', 'file', 'filename', 'source');
+  const line = pick('line', 'line_number', 'lineno', 'row');
+  const column = pick('column', 'col', 'column_number');
+  const reason = pick('reason', 'detail', 'details', 'message', 'compile_error', 'error');
+
+  let file = null;
+  if (path) {
+    file = String(path).replace(/^\/+/, '');
+    // The cloud names modules like "handlers/message" or "handlers/message.js";
+    // the studio knows them under tgcloud/ and as .js files.
+    if (!file.startsWith('tgcloud/') && (file.startsWith('handlers/') || file.startsWith('endpoints/') || file.startsWith('lib/'))) {
+      file = `tgcloud/${file}`;
+    }
+    if (file.startsWith('tgcloud/') && !/\.[a-z0-9]+$/i.test(file)) file += '.js';
+  } else if (module) {
+    const name = String(module).replace(/^.*\//, '');
+    file = `tgcloud/handlers/${name.endsWith('.js') ? name : `${name}.js`}`;
+  }
+
+  return {
+    module: module ? String(module) : null,
+    file,
+    line: line !== null ? Number(line) || null : null,
+    column: column !== null ? Number(column) || null : null,
+    reason: reason ? String(reason) : null,
+    type: err?.type || null,
+    status: err?.status ?? null,
+  };
 }
 
 function sendFile(res, ui, what) {
@@ -505,6 +561,86 @@ function handleSchemaDiff() {
   if (remote == null && local == null) return { ok: true, hasSchema: false, touched: false, diff: null };
   const diff = computeDiff(remote ?? '', local ?? '', displayPath(SCHEMA_FILE));
   return { ok: true, hasSchema: true, touched: diff !== '', diff };
+}
+
+// Profiles: the bots this folder is linked to. One folder can hold several
+// — a staging bot next to the production one.
+function handleProfilesGet() {
+  const profiles = listProfiles();
+  return {
+    ok: true,
+    active: activeProfile(),
+    profiles: profiles.map((profile) => ({
+      name: profile.name,
+      label: profile.label,
+      masked: profile.token ? maskToken(profile.token) : null,
+      active: profile.active,
+    })),
+  };
+}
+
+async function handleProfileLink(body) {
+  const raw = String(body?.token || '').trim();
+  if (!raw) throw badRequest('Missing "token"');
+  const name = String(body?.name || '').trim() || 'default';
+  const check = await verifyToken(raw);
+  if (!check.ok && !check.network) {
+    throw badRequest('The server rejected that token. Get a fresh one from @BotFather (bot → Serverless → CLI Access).', 'rejected');
+  }
+  saveProfileToken(name, raw, String(body?.label || '').trim());
+  log('info', 'login', 'Profile linked from the studio.', { profile: name, token: maskToken(raw) });
+  return handleProfilesGet();
+}
+
+function handleProfileUse(body) {
+  const name = String(body?.name || '').trim();
+  if (!useProfile(name)) throw badRequest(`There is no profile called "${name}".`);
+  log('info', 'login', 'Profile switched in the studio.', { profile: name });
+  return handleProfilesGet();
+}
+
+function handleProfileDelete(body) {
+  const name = String(body?.name || '').trim();
+  if (!removeProfile(name)) throw badRequest(`There is no profile called "${name}".`);
+  return handleProfilesGet();
+}
+
+// Backups: a copy of the project as it works right now, so a broken change
+// can be undone without leaving the browser.
+function handleBackupsGet(project) {
+  return { ok: true, backups: listBackups(project.root) };
+}
+
+async function handleBackupCreate(project, body) {
+  const manifest = createBackup(project.root, { label: body?.label || '' });
+  log('info', 'backup', 'Backup created from the studio.', { id: manifest.id, files: manifest.files });
+  return { ok: true, backup: manifest, backups: listBackups(project.root) };
+}
+
+async function handleBackupRestore(project, body) {
+  const id = String(body?.id || '').trim();
+  if (!id) throw badRequest('Which backup should be restored?');
+  let result;
+  try {
+    result = restoreBackup(project.root, id);
+  } catch (err) {
+    throw badRequest(err.message);
+  }
+  log('info', 'backup', 'Backup restored from the studio.', { id, files: result.restored.length });
+  return {
+    ok: true,
+    restored: result.restored,
+    safety: result.safety,
+    backup: result.manifest,
+    backups: listBackups(project.root),
+  };
+}
+
+async function handleBackupDelete(project, body) {
+  const id = String(body?.id || '').trim();
+  if (!id) throw badRequest('Which backup should be removed?');
+  const removed = removeBackup(project.root, id);
+  return { ok: true, removed, backups: listBackups(project.root) };
 }
 
 // The network settings the studio can change at runtime: which server to

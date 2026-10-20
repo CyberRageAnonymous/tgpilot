@@ -99,6 +99,33 @@ block at a build output folder:
 keeps a hash-based snapshot in `.tgpilot/static.json` and prints the public
 URL of the Mini App. `"static": false` takes the build back down.
 
+## Backups
+
+A copy of the project, safe to roll back to. Take one before a big change;
+if the bot breaks, put it back with one command.
+
+```bash
+tgpilot backup --label "working version"   # save
+tgpilot backups                            # list
+tgpilot restore 20240102-153000-working-version   # put it back
+```
+
+A restore first saves the state that is there now, so nothing is ever lost.
+The studio has the same thing in the **Backups** card on the home page.
+
+## Several bots in one folder
+
+A folder can be linked to more than one bot — a staging copy next to the live
+one.
+
+```bash
+tgpilot login --profile staging <token>
+tgpilot profiles                 # what is linked
+tgpilot profiles --use staging  # switch
+```
+
+The studio switches bots from the pill in the top bar.
+
 ## The web studio
 
 ```bash

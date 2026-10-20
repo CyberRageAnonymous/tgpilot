@@ -11,7 +11,8 @@
   <button id="btn-back" class="ghost back" hidden>← Back</button>
   <div class="top-title" id="top-title">tgpilot studio</div>
   <div class="bot-state">
-    <span id="bot-token" class="token-chip">not linked</span>
+    <button id="btn-help" class="ghost small" title="The manual">Help</button>
+    <button id="btn-profile" class="token-chip" title="Switch the bot this folder talks to">not linked</button>
     <button id="btn-link" class="ghost small">Link</button>
     <button id="btn-unlink" class="ghost small" hidden>Unlink</button>
   </div>
@@ -106,6 +107,17 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head"><h2>Backups</h2>
+        <button id="btn-backup-new" class="ghost small">Save a backup</button>
+      </div>
+      <p class="about-text">
+        A copy of the project as it works right now. Save one before a big
+        change — if the bot breaks, one click puts it back.
+      </p>
+      <div id="backup-list" class="file-list"></div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><h2>Network</h2>
         <button id="btn-network" class="ghost small">Settings</button>
       </div>
@@ -191,6 +203,154 @@
         <code>ssh -R 10809:127.0.0.1:10809 user@server</code> — then use
         <code>socks5://127.0.0.1:10809</code> here.
       </p>
+    </div>
+  </section>
+
+  <!-- The manual -->
+  <section id="view-help" class="view" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>tgpilot in one minute</h2>
+        <button id="btn-help-close" class="ghost small">Back</button>
+      </div>
+      <div class="about-text">
+        <p><strong>tgpilot</strong> runs your Telegram Serverless bot from a plain folder.
+        You write JavaScript, the cloud runs it — no server to keep alive, no deploy pipeline
+        to babysit. Everything stays on this machine; the bot token never leaves it.</p>
+        <p>Three ways to work with it: the <strong>studio</strong> in the browser (this one),
+        the <strong>terminal</strong> (<code>tgpilot help</code> lists every command), and
+        the <strong>files</strong> themselves — the studio edits the very files you would
+        edit by hand.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Getting started</h2></div>
+      <div class="about-text">
+        <ol class="help-steps">
+          <li><strong>Link a bot.</strong> Open @BotFather, pick your bot, go to
+          <em>Serverless → CLI Access</em> and copy the access token. Paste it in the
+          <em>Link</em> panel in the corner.</li>
+          <li><strong>Add a handler.</strong> Every update type is a function. Open
+          <em>Handlers</em>, press <em>+ module</em> and pick the update you want to react to.</li>
+          <li><strong>Try it without deploying.</strong> <em>Run</em> in the editor calls the
+          cloud with a sample payload and shows the live logs.</li>
+          <li><strong>Deploy.</strong> <em>Deploy &amp; status → Review changes</em> shows what
+          will go up; confirm and it is live.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>The project layout</h2></div>
+      <div class="about-text">
+        <pre class="help-tree">mybot/
+├── tgcloud/
+│   ├── handlers/     one file per update type (message.js, callback_query.js…)
+│   ├── endpoints/    functions your Mini App can call
+│   ├── lib/          shared modules you import
+│   └── schema.js     the tables and columns of your database
+├── dist/             the Mini App build (optional)
+└── tgcloud.jsonc     the project settings</pre>
+        <p>Only <code>handlers/</code> and <code>endpoints/</code> run in the cloud;
+        <code>lib/</code> is imported by them, and <code>schema.js</code> describes the
+        database. Everything else in the folder is yours — the studio shows it under
+        <em>Other files</em> and never deploys it.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Handlers, endpoints and the database</h2></div>
+      <div class="about-text">
+        <p><strong>A handler</strong> is one file per update type:</p>
+        <pre class="help-code">export default async function (message, ctx) {
+  await ctx.send('hello');
+}</pre>
+        <p><strong>An endpoint</strong> is a function your Mini App can call over HTTP.
+        <strong>schema.js</strong> describes your tables; changes to it become migrations
+        you review and apply in the <em>Database</em> section.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Backups</h2></div>
+      <div class="about-text">
+        <p>Save a copy of the project before a big change. If the bot breaks, restore the
+        copy with one click — the state at that moment is saved as a backup of its own,
+        so a restore can never destroy work.</p>
+        <p>In the terminal: <code>tgpilot backup</code>, <code>tgpilot backups</code>,
+        <code>tgpilot restore &lt;id&gt;</code>.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Several bots in one folder</h2></div>
+      <div class="about-text">
+        <p>A folder can be linked to more than one bot — a staging copy next to the live
+        one. Press the bot name in the top bar to link, switch or remove a profile.</p>
+        <p>In the terminal: <code>tgpilot login --profile staging &lt;token&gt;</code>,
+        <code>tgpilot profiles</code>, <code>tgpilot profiles --use staging</code>.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>When the cloud cannot be reached</h2></div>
+      <div class="about-text">
+        <p>The <em>Network</em> card on the home page says how this machine reaches the
+        cloud: the proxy that is running, the DNS answer and the route. If telegram.org
+        is blocked on your network, point tgpilot at a proxy — HTTP or SOCKS5, the kind is
+        detected on its own:</p>
+        <pre class="help-code">export TGPILOT_PROXY=socks5://127.0.0.1:10808
+tgpilot ping</pre>
+        <p>Add the same address in the <em>Network</em> card and it is stored with the
+        project. A filtered DNS can be worked around with DNS over HTTPS
+        (<code>TGPILOT_DOH=1</code>).</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>The terminal</h2></div>
+      <div class="about-text">
+        <p>The studio is one way in; the terminal is the other. The most useful commands:</p>
+        <ul class="help-list">
+          <li><code>tgpilot status</code> — what differs from the bot</li>
+          <li><code>tgpilot diff</code> — the changes, line by line</li>
+          <li><code>tgpilot push</code> — deploy the changes</li>
+          <li><code>tgpilot run message '{"text":"hi"}'</code> — run a handler in the cloud</li>
+          <li><code>tgpilot migrate</code> — walk through the database changes</li>
+          <li><code>tgpilot webhook</code> — the webhook state</li>
+          <li><code>tgpilot logs</code> — the journal of this tool</li>
+          <li><code>tgpilot help</code> — the full list</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>When something goes wrong</h2></div>
+      <div class="about-text">
+        <p>Errors in the studio come as a report: what happened, which file failed and a
+        button that opens the file at the right line. The journal keeps the rest:</p>
+        <ul class="help-list">
+          <li><code>tgpilot logs</code> — everything this tool did</li>
+          <li><code>tgpilot ping</code> — is the cloud reachable at all</li>
+          <li><code>tgpilot status</code> — does the folder still match the bot</li>
+          <li><code>tgpilot backup</code> — save the state before trying something risky</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Links</h2></div>
+      <div class="link-list">
+        <a class="link-row" href="https://github.com/CyberRageAnonymous/tgpilot" target="_blank" rel="noopener">
+          <span class="k">The project</span><span class="v">github.com/CyberRageAnonymous/tgpilot</span>
+        </a>
+        <a class="link-row" href="https://t.me/cyberrageofficial" target="_blank" rel="noopener">
+          <span class="k">Telegram channel</span><span class="v">t.me/cyberrageofficial</span>
+        </a>
+        <a class="link-row" href="https://x.com/CyberRageAnon" target="_blank" rel="noopener">
+          <span class="k">X (Twitter)</span><span class="v">x.com/CyberRageAnon</span>
+        </a>
+      </div>
     </div>
   </section>
 
@@ -334,10 +494,48 @@
   </div>
 </dialog>
 
-<dialog id="dialog-error" class="dialog dialog-narrow">
-  <div class="dialog-head"><h3>Was not possible</h3><button class="ghost small" data-close>×</button></div>
-  <div id="dialog-error-msg" class="error-msg"></div>
+<dialog id="dialog-profiles" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3>Bots in this folder</h3><button class="ghost small" data-close>×</button></div>
+  <div class="dialog-body">
+    <p class="hint">A folder can talk to more than one bot — a staging copy next to the live one.</p>
+    <div id="profile-list" class="file-list"></div>
+    <div class="stack">
+      <label class="field">
+        <span class="field-label">Link another bot</span>
+        <input id="profile-token" type="password" spellcheck="false" placeholder="access token from @BotFather">
+      </label>
+      <label class="field">
+        <span class="field-label">Name</span>
+        <input id="profile-name" type="text" spellcheck="false" placeholder="staging">
+      </label>
+      <button id="btn-profile-link" class="primary small">Link this bot</button>
+    </div>
+  </div>
   <div class="dialog-actions"><button class="ghost" data-close>Close</button></div>
+</dialog>
+
+<dialog id="dialog-backup" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3>Restore this backup?</h3><button class="ghost small" data-close>×</button></div>
+  <div class="dialog-body">
+    <p class="error-msg" id="backup-restore-text">The files in the project are replaced by the ones in the backup.</p>
+    <p class="hint">The state right now is saved as a backup first, so nothing is lost.</p>
+  </div>
+  <div class="dialog-actions">
+    <button class="ghost" data-close>Cancel</button>
+    <button id="btn-backup-restore" class="primary">Restore</button>
+  </div>
+</dialog>
+
+<dialog id="dialog-error" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3 id="dialog-error-title">That did not work</h3><button class="ghost small" data-close>×</button></div>
+  <div class="dialog-body">
+    <div id="dialog-error-msg" class="error-msg"></div>
+    <div id="dialog-error-details" class="error-details" hidden></div>
+  </div>
+  <div class="dialog-actions">
+    <button id="dialog-error-open" class="primary small" hidden>Open the file</button>
+    <button class="ghost" data-close>Close</button>
+  </div>
 </dialog>
 
 <script src="/app.js"></script>

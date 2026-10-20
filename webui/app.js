@@ -42,6 +42,7 @@ async function api(path, options = {}) {
   if (!res.ok || body.ok === false) {
     const err = new Error(body.error || `request failed (${res.status})`);
     err.kind = body.kind;
+    err.details = body.details || null;
     throw err;
   }
   return body;
@@ -51,10 +52,51 @@ const GET = (path) => api(path);
 const POST = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body || {}) });
 const DEL = (path, body) => api(path, { method: 'DELETE', body: JSON.stringify(body || {}) });
 
+// The error dialog is a report, not a shrug: it says what happened, which
+// file failed and offers to take you straight to the spot.
+const ERROR_TITLES = {
+  revision: 'The bot moved on',
+  auth: 'The bot did not accept the token',
+  rejected: 'The cloud refused the request',
+  network: 'The cloud could not be reached',
+  server: 'The studio hit a problem',
+  error: 'That did not work',
+};
+
 function showError(err) {
   if (err.kind === 'auth') refreshProject();
+  const title = ERROR_TITLES[err.kind] || ERROR_TITLES.error;
+  $('dialog-error-title').textContent = title;
   $('dialog-error-msg').textContent = err.message || String(err);
+  renderErrorDetails(err.details);
   $('dialog-error').showModal();
+}
+
+function renderErrorDetails(details) {
+  const box = $('dialog-error-details');
+  const file = details?.file;
+  const line = details?.line;
+  if (!details || (!file && !details.reason && !details.module)) {
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+  const rows = [];
+  if (file) rows.push(`<div class="detail-row"><span class="detail-key">file</span><span class="detail-value">${escapeHtml(file)}${line ? `:${line}` : ''}</span></div>`);
+  if (details.module && details.module !== file) rows.push(`<div class="detail-row"><span class="detail-key">module</span><span class="detail-value">${escapeHtml(details.module)}</span></div>`);
+  if (details.reason) rows.push(`<div class="detail-row"><span class="detail-key">reason</span><span class="detail-value">${escapeHtml(details.reason)}</span></div>`);
+  if (details.type) rows.push(`<div class="detail-row"><span class="detail-key">type</span><span class="detail-value">${escapeHtml(details.type)}</span></div>`);
+  box.innerHTML = rows.join('');
+  box.hidden = rows.length === 0;
+
+  const open = $('dialog-error-open');
+  open.hidden = !file;
+  if (file) {
+    open.onclick = () => {
+      $('dialog-error').close();
+      openPath(file, line).catch(showError);
+    };
+  }
 }
 
 function toast(text) {
@@ -69,6 +111,7 @@ function toast(text) {
 
 const SECTION_TITLES = {
   home: 'tgpilot studio',
+  help: 'Help',
   deploy: 'Deploy & status',
   files: 'Files',
   editor: 'Editor',
@@ -109,6 +152,10 @@ function sectionTitle(key) {
 }
 
 function goBack() {
+  if (state.view === 'help') {
+    show('home');
+    return;
+  }
   if (state.view === 'editor') {
     if (state.section) openSection(state.section);
     else if (state.fromView === 'database') show('database');
@@ -135,6 +182,10 @@ function wire() {
     row.onclick = () => openSection(row.dataset.open).catch(showError);
   }
 
+  $('btn-help').onclick = () => show('help');
+  $('btn-help-close').onclick = () => show('home');
+  $('btn-profile').onclick = () => openProfiles().catch(showError);
+  $('btn-profile-link').onclick = () => linkProfile().catch(showError);
   $('btn-link').onclick = () => $('dialog-link').showModal();
   $('btn-link-save').onclick = () => linkBot().catch(showError);
   $('btn-unlink').onclick = () => unlinkBot().catch(showError);
@@ -172,6 +223,9 @@ function wire() {
   $('btn-logs-clear').onclick = () => logsClear().catch(showError);
   $('logs-level').onchange = () => loadLogs().catch(() => {});
 
+  $('btn-backup-new').onclick = () => createBackup().catch(showError);
+  $('btn-backup-restore').onclick = () => restoreBackup().catch(showError);
+
   $('btn-network').onclick = () => openNetwork().catch(showError);
   $('btn-network-save').onclick = () => saveNetwork().catch(showError);
   $('btn-network-test').onclick = () => testNetwork().catch(showError);
@@ -203,7 +257,135 @@ async function start() {
   await refreshStatus().catch(showError);
   loadLogs().catch(() => {});
   updateHomeSubs();
+  loadBackups().catch(() => {});
   refreshNetworkSummary().catch(() => {});
+}
+
+// --- profiles ----------------------------------------------------------------
+
+// The bots this folder is linked to. Switching is one click; the studio
+// keeps talking to the new bot right away.
+async function openProfiles() {
+  await renderProfiles();
+  $('profile-token').value = '';
+  $('profile-name').value = '';
+  $('dialog-profiles').showModal();
+}
+
+async function renderProfiles() {
+  const box = $('profile-list');
+  const out = await GET('/api/profiles');
+  const profiles = out.profiles || [];
+  if (!profiles.length) {
+    box.innerHTML = '<div class="hint">no bot linked yet</div>';
+    return;
+  }
+  box.innerHTML = profiles
+    .map((profile) => {
+      const mark = profile.active ? '<span class="badge-active">active</span>' : '';
+      const label = profile.label ? ` — ${escapeHtml(profile.label)}` : '';
+      return `<div class="file-row profile-row${profile.active ? ' active' : ''}">
+        <span class="file-name">${escapeHtml(profile.name)}${label}</span>
+        <span class="file-sub">${escapeHtml(profile.masked || 'no token')} ${mark}</span>
+        ${profile.active ? '' : `<button class="ghost small profile-use" data-name="${escapeHtml(profile.name)}">Use</button>`}
+        <button class="ghost small profile-remove" data-name="${escapeHtml(profile.name)}">×</button>
+      </div>`;
+    })
+    .join('');
+  for (const button of box.querySelectorAll('.profile-use')) {
+    button.onclick = () => useProfile(button.dataset.name).catch(showError);
+  }
+  for (const button of box.querySelectorAll('.profile-remove')) {
+    button.onclick = () => removeProfile(button.dataset.name).catch(showError);
+  }
+}
+
+async function useProfile(name) {
+  const out = await POST('/api/profiles/use', { name });
+  toast(`Now talking to "${name}"`);
+  $('dialog-profiles').close();
+  await Promise.all([refreshProject(), refreshStatus(), loadTree()]).catch(() => {});
+  updateHomeSubs();
+  return out;
+}
+
+async function linkProfile() {
+  const token = $('profile-token').value.trim();
+  if (!token) return;
+  const name = $('profile-name').value.trim() || 'default';
+  const out = await POST('/api/profiles', { token, name });
+  toast(`Linked "${name}"`);
+  $('profile-token').value = '';
+  $('profile-name').value = '';
+  await renderProfiles();
+  await Promise.all([refreshProject(), refreshStatus()]).catch(() => {});
+  updateHomeSubs();
+  return out;
+}
+
+async function removeProfile(name) {
+  await DEL('/api/profiles', { name });
+  toast(`Removed "${name}"`);
+  await renderProfiles();
+  await Promise.all([refreshProject(), refreshStatus()]).catch(() => {});
+  updateHomeSubs();
+}
+
+// --- backups -----------------------------------------------------------------
+
+// The list of saved copies, newest first. Every one of them can be put back
+// with a single click.
+async function loadBackups() {
+  const box = $('backup-list');
+  if (!box) return;
+  let out;
+  try {
+    out = await GET('/api/backups');
+  } catch {
+    box.innerHTML = '<div class="hint">backups are unavailable</div>';
+    return;
+  }
+  const backups = out.backups || [];
+  if (!backups.length) {
+    box.innerHTML = '<div class="hint">no backups yet — save one before your next big change</div>';
+    return;
+  }
+  box.innerHTML = backups
+    .map((backup) => {
+      const when = new Date(backup.createdAt).toLocaleString();
+      const label = backup.label ? escapeHtml(backup.label) : '';
+      return `<div class="file-row backup-row">
+        <span class="file-name">${escapeHtml(backup.id)}${label ? ` — ${label}` : ''}</span>
+        <span class="file-sub">${escapeHtml(when)} · ${backup.files} files</span>
+        <button class="ghost small backup-restore" data-id="${escapeHtml(backup.id)}">Restore</button>
+      </div>`;
+    })
+    .join('');
+  for (const button of box.querySelectorAll('.backup-restore')) {
+    button.onclick = () => {
+      $('backup-restore-text').textContent = `The files in the project are replaced by the ones in ${button.dataset.id}.`;
+      $('btn-backup-restore').dataset.id = button.dataset.id;
+      $('dialog-backup').showModal();
+    };
+  }
+}
+
+async function createBackup() {
+  const label = window.prompt('Name this backup (optional):', '');
+  if (label === null) return;
+  const out = await POST('/api/backups', { label });
+  toast(`Backup saved: ${out.backup.id}`);
+  await loadBackups();
+}
+
+async function restoreBackup() {
+  const id = $('btn-backup-restore').dataset.id;
+  $('dialog-backup').close();
+  if (!id) return;
+  const out = await POST('/api/backups/restore', { id });
+  toast(`${out.restored.length} files restored${out.safety ? ` — the previous state is saved as ${out.safety.id}` : ''}`);
+  await Promise.all([loadBackups(), loadTree(), refreshProject()]).catch(() => {});
+  updateHomeSubs();
 }
 
 // --- network -----------------------------------------------------------------
@@ -292,8 +474,8 @@ async function refreshProject() {
   state.staticSource = info.static ? info.static.source : null;
   state.handlerTypes = info.handlerTypes || [];
   const token = info.token;
-  $('bot-token').textContent = token ? `bot ${token.masked}` : 'not linked';
-  $('bot-token').classList.toggle('linked', Boolean(token));
+  $('btn-profile').textContent = token ? `bot ${token.masked}` : 'not linked';
+  $('btn-profile').classList.toggle('linked', Boolean(token));
   $('btn-unlink').hidden = !token;
   $('btn-link').hidden = Boolean(token);
   $('hero-bot').textContent = token ? `bot ${token.masked}` : 'not linked yet — press Link in the corner';
@@ -333,7 +515,7 @@ function countFilesIn(dir) {
 }
 
 function updateHomeSubs() {
-  const linked = $('bot-token').classList.contains('linked');
+  const linked = $('btn-profile').classList.contains('linked');
   const s = state.lastStatus;
 
   let deploy = linked ? 'open for status, deploy and webhook' : 'link a bot first';
@@ -590,7 +772,7 @@ function isRunnableModule(path) {
   return Boolean(match && state.runnable.includes(match[1]));
 }
 
-async function openPath(path) {
+async function openPath(path, line) {
   if (state.dirty && !confirm('Discard unsaved changes?')) return;
   const out = await GET(`/api/file?path=${encodeURIComponent(path)}`);
   state.fromView = state.view;
@@ -605,6 +787,21 @@ async function openPath(path) {
   $('btn-delete').disabled = false;
   $('btn-run-editor').hidden = !isRunnableModule(path);
   state.editorModule = path.replace(/^tgcloud\//, '').replace(/\.js$/, '');
+  if (line) jumpToLine(Number(line));
+}
+
+// Puts the cursor on a line and scrolls it into view — the way an editor
+// takes you to the place the compiler complained about.
+function jumpToLine(line) {
+  const editor = $('editor');
+  const lines = editor.value.split('\n');
+  const index = Math.min(Math.max(line - 1, 0), Math.max(lines.length - 1, 0));
+  const start = lines.slice(0, index).reduce((n, l) => n + l.length + 1, 0);
+  const end = start + lines[index].length;
+  editor.focus();
+  editor.setSelectionRange(start, end);
+  const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
+  editor.scrollTop = Math.max(0, (index - 6) * lineHeight);
 }
 
 function onEditorKey(e) {

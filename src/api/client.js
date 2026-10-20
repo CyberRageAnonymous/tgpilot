@@ -218,8 +218,10 @@ export function serverErrorText(err) {
       err.name === 'TimeoutError' ||
       /timed out/i.test(where) ||
       /TIMEOUT/i.test(String(cause));
+    // A TypeError is only a network problem when it is undici's "fetch
+    // failed"; a plain TypeError from our own code is a bug, not an outage.
     const deadish =
-      err.name === 'TypeError' ||
+      (err.name === 'TypeError' && /fetch failed/i.test(where)) ||
       /fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET|EPROTO|EAI_AGAIN|certificate|proxy/i.test(`${cause} ${where}`);
 
     if (timed || deadish) {

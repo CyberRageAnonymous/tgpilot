@@ -220,3 +220,26 @@ test('web refuses to serve anything that is not a project', async () => {
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /No project folder found/);
 });
+
+test('a cloud failure comes back as a report with the file that failed', async () => {
+  const port = await freePort();
+  // A fresh bot: the safety check refuses to overwrite a bot this folder
+  // has never synced with.
+  const broken = new Project(cloud, cloud.mintToken(), 'broken');
+  broken.write(
+    'tgcloud/handlers/message.js',
+    'export default async function (message, ctx) {\n  const x = __COMPILE_ERROR__;\n  return x;\n}\n'
+  );
+  const child = await startStudio(broken, port);
+  try {
+    const res = await api(port, '/api/push', { method: 'POST', body: { confirm: true } });
+    assert.equal(res.status, 400, res.text);
+    assert.match(res.json.error, /Compilation failed/);
+    assert.ok(res.json.details, 'the answer carries details');
+    assert.equal(res.json.details.file, 'tgcloud/handlers/message.js');
+    assert.equal(res.json.details.line, 2);
+    assert.match(res.json.details.reason, /Unexpected token/);
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
