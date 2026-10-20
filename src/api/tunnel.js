@@ -2,9 +2,12 @@ import net from 'node:net';
 import tls from 'node:tls';
 import { URL } from 'node:url';
 
-// Speaks HTTP(S) through an HTTP proxy with a CONNECT tunnel — no extra
-// packages. Telegram domains are blocked on some networks; this is how users
-// get through their local proxy/VPN application.
+// Speaks HTTP(S) through a proxy — no extra packages. Two kinds work and are
+// even detected automatically:
+//   * HTTP CONNECT proxies (v2rayN "http port", clash "mixed port")
+//   * SOCKS5 proxies (v2rayN "socks port", clash "socks-port")
+// Telegram domains are blocked on some networks; this is how users get
+// through their local proxy/VPN application.
 
 export function proxyFromEnv() {
   return (
@@ -25,193 +28,401 @@ function requestTimeout() {
   return Number(process.env.TGPILOT_TIMEOUT) || 20000;
 }
 
-function parseHeaders(raw) {
-  const lines = raw.split('\r\n');
+export class ProxyError extends Error {
+  constructor(message, hint) {
+    super(message);
+    this.name = 'ProxyError';
+    this.hint = hint;
+  }
+}
+
+// A buffered reader: the socket keeps one permanent listener so no bytes
+// are lost between reads.
+class Reader {
+  constructor(socket) {
+    this.socket = socket;
+    this.buffer = Buffer.alloc(0);
+    this.waiters = [];
+    this.error = null;
+    this.ended = false;
+    socket.on('data', (chunk) => {
+      this.buffer = Buffer.concat([this.buffer, chunk]);
+      this.wake();
+    });
+    socket.on('end', () => {
+      this.ended = true;
+      this.wake();
+    });
+    socket.on('error', (err) => {
+      this.error = err;
+      this.wake();
+    });
+  }
+
+  wake() {
+    const waiters = this.waiters.splice(0);
+    for (const resolve of waiters) resolve();
+  }
+
+  async wait() {
+    while (this.buffer.length === 0) {
+      if (this.error) throw this.error;
+      if (this.ended) return;
+      await new Promise((resolve) => this.waiters.push(resolve));
+    }
+  }
+
+  async read(n) {
+    while (this.buffer.length < n) {
+      if (this.error) throw this.error;
+      if (this.ended) throw new ProxyError('the connection closed before the answer was complete');
+      await this.wait();
+    }
+    const out = this.buffer.subarray(0, n);
+    this.buffer = this.buffer.subarray(n);
+    return out;
+  }
+
+  async line() {
+    while (true) {
+      const idx = this.buffer.indexOf('\r\n');
+      if (idx !== -1) {
+        const out = this.buffer.subarray(0, idx);
+        this.buffer = this.buffer.subarray(idx + 2);
+        return out;
+      }
+      if (this.error) throw this.error;
+      if (this.ended) throw new ProxyError('the connection closed in the middle of the answer');
+      await this.wait();
+    }
+  }
+
+  async head() {
+    while (true) {
+      const idx = this.buffer.indexOf('\r\n\r\n');
+      if (idx !== -1) {
+        const out = this.buffer.subarray(0, idx + 4);
+        this.buffer = this.buffer.subarray(idx + 4);
+        return out;
+      }
+      if (this.error) throw this.error;
+      if (this.ended) throw new ProxyError('the connection closed before the answer was complete');
+      await this.wait();
+    }
+  }
+
+  async rest() {
+    while (!this.ended && !this.error) await this.wait();
+    if (this.error) throw this.error;
+    const out = this.buffer;
+    this.buffer = Buffer.alloc(0);
+    return out;
+  }
+}
+
+function ipv4ToBuffer(host) {
+  return Buffer.from(host.split('.').map((part) => Number(part) & 0xff));
+}
+
+function ipv6ToBuffer(host) {
+  const [head, tail = ''] = host.split('::');
+  const headParts = head ? head.split(':').filter(Boolean) : [];
+  const tailParts = tail ? tail.split(':').filter(Boolean) : [];
+  const missing = 8 - headParts.length - tailParts.length;
+  const parts = [...headParts, ...Array(Math.max(0, missing)).fill('0'), ...tailParts];
+  const bytes = Buffer.alloc(16);
+  parts.slice(0, 8).forEach((part, i) => bytes.writeUInt16BE(Number.parseInt(part, 16) || 0, i * 2));
+  return bytes;
+}
+
+// --- SOCKS5 -----------------------------------------------------------------
+
+async function socksHandshake(reader, proxy, target, greeting) {
+  const methods = greeting.slice(2, 2 + greeting[1]);
+  const hasCreds = Boolean(proxy.username || proxy.password);
+  let method = 0x00;
+  if (methods.includes(0x02) && hasCreds) method = 0x02;
+  else if (!methods.includes(0x00)) {
+    if (methods.includes(0x02)) method = 0x02;
+    else throw new ProxyError('the SOCKS5 proxy wants an authentication method this client does not know');
+  }
+
+  reader.socket.write(Buffer.from([0x05, method]));
+  const reply = await reader.read(2);
+  if (reply[1] === 0xff) {
+    throw new ProxyError(
+      'the SOCKS5 proxy rejected every offered authentication method',
+      'check the user name and password in TGPILOT_PROXY (user:pass@host:port)'
+    );
+  }
+  if (reply[1] === 0x02) {
+    const user = Buffer.from(decodeURIComponent(proxy.username || ''), 'utf8');
+    const pass = Buffer.from(decodeURIComponent(proxy.password || ''), 'utf8');
+    reader.socket.write(Buffer.concat([Buffer.from([0x01, user.length]), user, Buffer.from([pass.length]), pass]));
+    const authReply = await reader.read(2);
+    if (authReply[1] !== 0x00) {
+      throw new ProxyError(
+        'the SOCKS5 proxy rejected the user name or password',
+        'check the credentials in TGPILOT_PROXY (user:pass@host:port)'
+      );
+    }
+  }
+
+  const host = target.hostname;
+  let atyp;
+  let addr;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    atyp = 0x01;
+    addr = ipv4ToBuffer(host);
+  } else if (host.includes(':')) {
+    atyp = 0x04;
+    addr = ipv6ToBuffer(host);
+  } else {
+    atyp = 0x03;
+    const name = Buffer.from(host, 'utf8');
+    addr = Buffer.concat([Buffer.from([name.length]), name]);
+  }
+  const targetPort = Number(target.port) || (target.protocol === 'https:' ? 443 : 80);
+  reader.socket.write(
+    Buffer.concat([
+      Buffer.from([0x05, 0x01, 0x00, atyp]),
+      addr,
+      Buffer.from([(targetPort >> 8) & 0xff, targetPort & 0xff]),
+    ])
+  );
+
+  const answer = await reader.read(4);
+  if (answer[1] !== 0x00) {
+    const reasons = {
+      1: 'the proxy refused the connection (general failure)',
+      2: 'the proxy refused the connection (rule not allowed)',
+      3: 'the proxy refused the connection (network unreachable)',
+      4: 'the proxy refused the connection (host unreachable)',
+      5: 'the proxy refused the connection (connection refused)',
+      6: 'the proxy refused the connection (TTL expired)',
+      7: 'the proxy refused the connection (command not supported)',
+      8: 'the proxy refused the connection (address type not supported)',
+    };
+    throw new ProxyError(reasons[answer[1]] || `the proxy refused the connection (SOCKS5 code ${answer[1]})`);
+  }
+  if (answer[3] === 0x01) await reader.read(4);
+  else if (answer[3] === 0x04) await reader.read(16);
+  else if (answer[3] === 0x03) {
+    const len = (await reader.read(1))[0];
+    await reader.read(len);
+  }
+  await reader.read(2);
+}
+
+// --- HTTP CONNECT -----------------------------------------------------------
+
+async function httpConnect(reader, proxy, target) {
+  const targetPort = Number(target.port) || (target.protocol === 'https:' ? 443 : 80);
+  const auth =
+    proxy.username || proxy.password
+      ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString('base64')}\r\n`
+      : '';
+  reader.socket.write(
+    `CONNECT ${target.hostname}:${targetPort} HTTP/1.1\r\nHost: ${target.hostname}:${targetPort}\r\n${auth}\r\n`
+  );
+  const head = (await reader.head()).toString('latin1');
+  const statusLine = head.split('\r\n')[0];
+  if (!/^HTTP\//i.test(statusLine)) {
+    throw new ProxyError(
+      `the proxy did not answer the CONNECT (${statusLine.slice(0, 40) || 'no answer'})`,
+      'that port may speak SOCKS5 — try TGPILOT_PROXY=socks5://host:port'
+    );
+  }
+  const status = Number.parseInt(statusLine.split(' ')[1], 10);
+  if (status === 407) {
+    throw new ProxyError(
+      'the proxy asked for a user name and password',
+      'put them in TGPILOT_PROXY, e.g. http://user:pass@host:port'
+    );
+  }
+  if (status !== 200) {
+    throw new ProxyError(`the proxy refused the tunnel (${statusLine || 'no answer'})`);
+  }
+}
+
+async function connectProxy(proxy, scheme) {
+  const proxyPort = Number(proxy.port) || (proxy.protocol === 'https:' ? 443 : scheme === 'socks5' ? 1080 : 80);
+  const socket = net.connect({ host: proxy.hostname, port: proxyPort });
+  socket.setNoDelay(true);
+  await new Promise((resolve, reject) => {
+    const onError = (err) =>
+      reject(
+        new ProxyError(
+          `nothing answered on the proxy port ${proxy.hostname}:${proxyPort} (${err.code || err.message})`,
+          'start the proxy/VPN app, or fix the port in TGPILOT_PROXY'
+        )
+      );
+    socket.once('error', onError);
+    socket.once('connect', () => {
+      socket.removeListener('error', onError);
+      resolve();
+    });
+  });
+  return socket;
+}
+
+// Waits for the first byte, but not forever: an HTTP proxy says nothing
+// until we send CONNECT, while a SOCKS5 proxy greets us immediately.
+// The byte is only looked at, never consumed.
+async function peek(reader, ms) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(false), ms);
+  });
+  const ready = (async () => {
+    while (!reader.buffer.length && !reader.ended && !reader.error) await reader.wait();
+    return true;
+  })();
+  const ok = await Promise.race([ready, timeout]);
+  clearTimeout(timer);
+  if (!ok) return null;
+  if (reader.error) throw reader.error;
+  return reader.buffer.length ? reader.buffer[0] : null;
+}
+
+// Opens a tunnel to the target and returns the socket that carries it.
+async function openTunnel(proxy, target, scheme) {
+  const socket = await connectProxy(proxy, scheme);
+  const reader = new Reader(socket);
+
+  const greeting = await peek(reader, 1200);
+  if (greeting === 0x05) {
+    await reader.read(1); // version byte, already peeked
+    const count = (await reader.read(1))[0];
+    const methods = count ? await reader.read(count) : Buffer.alloc(0);
+    await socksHandshake(reader, proxy, target, Buffer.concat([Buffer.from([0x05, count]), methods]));
+    return { socket, reader };
+  }
+  if (greeting !== null && greeting !== 0x48) {
+    socket.destroy();
+    throw new ProxyError(
+      `the proxy answered with unexpected bytes (0x${greeting.toString(16)}) instead of opening a tunnel`,
+      'check that the port belongs to an HTTP or SOCKS5 proxy'
+    );
+  }
+
+  try {
+    await httpConnect(reader, proxy, target);
+  } catch (err) {
+    socket.destroy();
+    throw err;
+  }
+  return { socket, reader };
+}
+
+// One plain HTTP/1.1 request through the tunnel. Resolves with a
+// fetch-compatible { status, statusText, text() }.
+export async function tunnelRequest({ method, url, headers = {}, body = null, timeout = requestTimeout() }) {
+  let proxy;
+  let scheme;
+  try {
+    proxy = new URL(proxyFromEnv());
+    scheme = proxy.protocol.replace(':', '');
+    if (scheme === 'socks') scheme = 'socks5';
+    if (!['http', 'https', 'socks5'].includes(scheme)) throw new Error('scheme');
+    if (!proxy.hostname) throw new Error('host');
+  } catch {
+    throw new ProxyError(
+      `TGPILOT_PROXY is not a usable proxy address (${proxyFromEnv() || 'empty'})`,
+      'expected http://host:port or socks5://host:port'
+    );
+  }
+
+  const target = new URL(url);
+  if (!/^https?:$/.test(target.protocol)) {
+    throw new ProxyError(`unsupported scheme ${target.protocol}`);
+  }
+
+  const work = (async () => {
+    const { socket, reader } = await openTunnel(proxy, target, scheme);
+    let stream = socket;
+    try {
+      if (target.protocol === 'https:') {
+        stream = tls.connect({ socket, servername: target.hostname });
+        await new Promise((resolve, reject) => {
+          stream.once('secureConnect', resolve);
+          stream.once('error', (err) =>
+            reject(new ProxyError(`the TLS handshake with ${target.host} failed (${err.code || err.message})`))
+          );
+        });
+        return await readResponse(new Reader(stream), { method, target, headers, body });
+      }
+      return await readResponse(reader, { method, target, headers, body });
+    } finally {
+      try {
+        // A graceful end avoids a TCP reset that could cut off a reply
+        // the server is still writing.
+        stream.end();
+        const cleaner = setTimeout(() => {
+          try {
+            stream.destroy();
+          } catch {
+            /* already gone */
+          }
+        }, 100);
+        cleaner.unref?.();
+      } catch {
+        /* already gone */
+      }
+    }
+  })();
+
+  let timer;
+  const guard = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new ProxyError(`the connection to ${target.host} timed out after ${Math.round(timeout / 1000)} s`)),
+      timeout
+    );
+  });
+  try {
+    return await Promise.race([work, guard]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readResponse(reader, { method, target, headers, body }) {
+  const path = (target.pathname === '' ? '/' : target.pathname) + (target.search || '');
+  let head = `${method} ${path} HTTP/1.1\r\nHost: ${target.host}\r\nConnection: close\r\n`;
+  for (const [k, v] of Object.entries(headers)) head += `${k}: ${v}\r\n`;
+  if (body && !Object.keys(headers).some((k) => k.toLowerCase() === 'content-length')) {
+    head += `Content-Length: ${body.length}\r\n`;
+  }
+  head += '\r\n';
+  reader.socket.write(Buffer.concat([Buffer.from(head, 'utf8'), body || Buffer.alloc(0)]));
+
+  const headBuf = await reader.head();
+  const headText = headBuf.toString('latin1');
+  const lines = headText.split('\r\n');
   const parts = lines[0].split(' ');
   const map = {};
   for (const line of lines.slice(1)) {
     const i = line.indexOf(':');
     if (i > 0) map[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
   }
-  return { status: Number.parseInt(parts[1], 10) || 0, statusText: (parts.slice(2).join(' ') || '').trim(), headers: map };
-}
+  const status = Number.parseInt(parts[1], 10) || 0;
+  const statusText = (parts.slice(2).join(' ') || '').trim();
 
-function bodyLength(headers) {
-  if (/^chunked$/i.test(headers['transfer-encoding'] || '')) return -1; // framing tells us when we are done
-  if (headers['content-length']) return Number.parseInt(headers['content-length'], 10);
-  return null; // read until the connection closes
-}
-
-// Strips HTTP/1.1 chunked framing ("size\r\n<data>\r\n"...).
-function decodeChunked(input) {
-  const parts = [];
-  let i = 0;
-  while (i < input.length) {
-    const lineEnd = input.indexOf('\r\n', i);
-    if (lineEnd === -1) break;
-    const size = Number.parseInt(input.subarray(i, lineEnd).toString('latin1').split(';')[0], 16);
-    if (!Number.isFinite(size) || size === 0) break;
-    const start = lineEnd + 2;
-    parts.push(input.subarray(start, start + size));
-    i = start + size + 2;
-  }
-  return Buffer.concat(parts.length ? parts : [Buffer.alloc(0)]);
-}
-
-// One plain HTTP/1.1 request through the tunnel. Resolves with a
-// fetch-compatible { status, statusText, text() }.
-export function tunnelRequest({ method, url, headers = {}, body = null, timeout = requestTimeout() }) {
-  let proxy;
-  try {
-    proxy = new URL(proxyFromEnv());
-    if (!/^https?:$/.test(proxy.protocol) || !proxy.hostname || !proxy.port) throw new Error('shape');
-  } catch {
-    return Promise.reject(new Error(`TGPILOT_PROXY is not a usable proxy address (${proxyFromEnv() || 'empty'}) — expected http://host:port`));
-  }
-  const target = new URL(url);
-  if (!/^https?:$/.test(target.protocol)) {
-    return Promise.reject(new Error(`unsupported scheme ${target.protocol}`));
+  let payload;
+  if (/^chunked$/i.test(map['transfer-encoding'] || '')) {
+    const chunks = [];
+    while (true) {
+      const size = Number.parseInt((await reader.line()).toString('latin1').split(';')[0], 16);
+      if (!Number.isFinite(size) || size === 0) break;
+      chunks.push(await reader.read(size));
+      await reader.read(2); // trailing CRLF
+    }
+    payload = Buffer.concat(chunks.length ? chunks : [Buffer.alloc(0)]);
+  } else if (map['content-length']) {
+    payload = await reader.read(Number.parseInt(map['content-length'], 10));
+  } else {
+    payload = await reader.rest();
   }
 
-  return new Promise((resolve, reject) => {
-    const proxyPort = Number(proxy.port) || (proxy.protocol === 'https:' ? 443 : 80);
-    const targetPort = Number(target.port) || (target.protocol === 'https:' ? 443 : 80);
-    const auth =
-      proxy.username || proxy.password
-        ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString('base64')}\r\n`
-        : '';
-
-    let buffered = Buffer.alloc(0);
-    let response = null;
-    let stream = null;
-    let settled = false;
-
-    function bail(err) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        stream?.destroy();
-      } catch {
-        /* already dead */
-      }
-      reject(err);
-    }
-
-    function finish() {
-      if (settled || !response) return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        stream?.destroy();
-      } catch {
-        /* already done */
-      }
-      let payload = buffered;
-      if (/^chunked$/i.test(response.headers['transfer-encoding'] || '')) payload = decodeChunked(buffered);
-      resolve({
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-        text: async () => String(payload),
-      });
-    }
-
-    const timer = setTimeout(
-      () => bail(new Error(`connection to ${target.host} timed out after ${Math.round(timeout / 1000)} s`)),
-      timeout
-    );
-    timer.unref?.();
-
-    function collect(chunk) {
-      buffered = Buffer.concat([buffered, chunk]);
-      if (!response) {
-        const raw = buffered.toString('latin1');
-        const end = raw.indexOf('\r\n\r\n');
-        if (end === -1) return;
-        response = parseHeaders(raw.slice(0, end));
-        buffered = buffered.subarray(Buffer.byteLength(raw.slice(0, end + 4)));
-      }
-      const want = bodyLength(response.headers);
-      if (want === 0 || (want !== null && want > 0 && buffered.length >= want)) finish();
-    }
-
-    function onStreamEnd() {
-      // With "Connection: close" or missing framing the whole body has
-      // arrived by now; anything else is a truncated answer.
-      if (response) finish();
-      else bail(new Error(`connection closed before a response arrived from ${target.host}`));
-    }
-
-    function sendRequest() {
-      const path = (target.pathname === '' ? '/' : target.pathname) + (target.search || '');
-      let head = `${method} ${path} HTTP/1.1\r\nHost: ${target.host}\r\nConnection: close\r\n`;
-      for (const [k, v] of Object.entries(headers)) head += `${k}: ${v}\r\n`;
-      if (body && !Object.keys(headers).some((k) => k.toLowerCase() === 'content-length')) {
-        head += `Content-Length: ${body.length}\r\n`;
-      }
-      head += '\r\n';
-      stream.write(Buffer.concat([Buffer.from(head, 'utf8'), body || Buffer.alloc(0)]));
-    }
-
-    function goSecure(connectionRest) {
-      if (connectionRest.length > 0) {
-        // TLS needs our ClientHello first; stray bytes mean a broken proxy.
-        bail(new Error('the proxy sent unexpected bytes through the tunnel'));
-        return;
-      }
-      socket.removeAllListeners('data');
-      socket.removeAllListeners('end');
-      socket.removeAllListeners('error');
-      stream = tls.connect({ socket, servername: target.hostname }, () => sendRequest());
-      stream.on('data', collect);
-      stream.on('end', onStreamEnd);
-      stream.on('error', bail);
-    }
-
-    function goPlain(connectionRest) {
-      socket.removeAllListeners('data');
-      socket.removeAllListeners('error');
-      socket.removeAllListeners('end');
-      socket.removeAllListeners('close');
-      stream = socket;
-      socket.on('data', collect);
-      socket.once('end', onStreamEnd);
-      socket.once('close', onStreamEnd);
-      sendRequest();
-      if (connectionRest.length) collect(connectionRest);
-    }
-
-    const socket = net.connect({ host: proxy.hostname, port: proxyPort }, () => {
-      socket.write(
-        `CONNECT ${target.hostname}:${targetPort} HTTP/1.1\r\nHost: ${target.hostname}:${targetPort}\r\n${auth}\r\n`
-      );
-    });
-    socket.setNoDelay(true);
-
-    socket.on('data', (chunk) => {
-      const raw = chunk.toString('latin1');
-      const headerEnd = raw.indexOf('\r\n\r\n');
-      if (headerEnd === -1) {
-        if (raw.length > 16384) bail(new Error('the proxy did not answer the CONNECT'));
-        return;
-      }
-      const status = Number.parseInt(raw.slice(0, raw.indexOf('\r\n')).split(' ')[1], 10);
-      if (status !== 200) {
-        bail(new Error(`the proxy refused the tunnel: ${status ?? '?'}`));
-        return;
-      }
-      const rest = chunk.subarray(Buffer.byteLength(raw.slice(0, headerEnd + 4)));
-      if (target.protocol === 'https:') {
-        goSecure(rest);
-      } else {
-        goPlain(rest);
-      }
-    });
-    socket.on('error', (err) => bail(err));
-    socket.on('end', () => {
-      if (!response) bail(new Error(`the proxy closed the connection (target ${target.host})`));
-    });
-    socket.on('close', () => bail(new Error(`the proxy closed the connection abruptly (target ${target.host})`)));
-  });
+  return { status, statusText, headers: map, text: async () => String(payload) };
 }

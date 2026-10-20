@@ -58,6 +58,9 @@ export function createMockCloud() {
     const url = new URL(req.url, 'http://mock');
     const p = url.pathname;
     const isBlob = /^\/(app\d+)\/manage\/static\/blob\//.test(p);
+    // Clients that hang up early (a cancelled request) must not take the
+    // whole test run down with an unhandled socket error.
+    req.socket.on('error', () => {});
 
     let raw = '';
     req.on('data', (chunk) => { raw += chunk; });
@@ -249,6 +252,10 @@ export function createMockCloud() {
       return err(res, 404, 'Unknown manage route');
     });
   });
+
+  // A client that hangs up early (a cancelled request) must not take the
+  // whole test run down with an unhandled socket error.
+  server.on('connection', (socket) => socket.on('error', () => {}));
 
   return { server, mintToken, bots, tokens };
 }

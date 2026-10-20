@@ -131,6 +131,24 @@ sees it. `--port` or `TGPILOT_WEB_PORT` changes the port.
 | `TGPILOT_DEBUG=1` | log every HTTP request/response to stderr |
 | `TGPILOT_ASSUME_TTY=1` | treat piped stdio as interactive (CI + prompts) |
 | `TGPILOT_WEB_PORT`, `TGPILOT_WEB_HOST` | port/host of `tgpilot web` |
+| `TGPILOT_PROXY` | send every cloud request through a proxy: `http://host:port` or `socks5://host:port` (credentials allowed: `socks5://user:pass@host:port`) |
+| `HTTPS_PROXY` / `ALL_PROXY` | used as a fallback when `TGPILOT_PROXY` is not set |
+| `TGPILOT_TIMEOUT` | how long a cloud request may take, in milliseconds (default 20000) |
+
+### Behind a filter or a VPN
+
+If `cloud.telegram.org` does not answer — a filtered DNS, a blocked route, a
+network that drops TLS — the CLI and the studio say so in plain words and
+`tgpilot ping` shows where the chain breaks:
+
+```bash
+tgpilot ping                       # URL, proxy, DNS, reachability
+export TGPILOT_PROXY=http://127.0.0.1:10809   # your proxy app's HTTP port
+tgpilot ping                       # ✓ Reach: the cloud answered in 210 ms
+```
+
+Both HTTP CONNECT proxies and SOCKS5 proxies work; the kind is detected on
+its own, so the address of your local proxy port is enough.
 
 The journal of everything tgpilot did lives in `.tgpilot/logs/`; read it with
 `tgpilot logs`, filter with `-n`, `--level`, `--scope`, and `--clear` to wipe.

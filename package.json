@@ -1,6 +1,6 @@
 {
   "name": "tgpilot",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "Studio and command-line companion for Telegram Serverless bots: write handlers, run them, watch logs and deploy to your bot.",
   "type": "module",
   "bin": {

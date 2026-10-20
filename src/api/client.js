@@ -156,10 +156,13 @@ export function serverErrorText(err) {
       let text = timed
         ? `The connection to ${base} timed out after ${Math.round(requestTimeout() / 1000)} s.`
         : `Could not reach the server at ${base}. Check your connection (or the TGPILOT_API_URL setting).`;
+      const reason = err.reason || err.cause?.code || '';
+      if (reason) text += ` (${reason})`;
       const proxy = proxyEnvName();
       text += proxy
         ? ` The configured proxy ${proxy} also failed — is that proxy app running? Diagnose: tgpilot ping`
         : ' If telegram.org is blocked on your network (common behind filters), set TGPILOT_PROXY=http://host:port — e.g. the local port of your VPN/proxy app — and try again. Diagnose: tgpilot ping';
+      if (err.hint) text += ` ${err.hint}`;
       return text;
     }
   }
