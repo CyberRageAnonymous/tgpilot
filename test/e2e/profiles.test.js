@@ -176,3 +176,72 @@ test('the old single token still works', async () => {
   assert.match(list.out, /default/);
   assert.match(list.out, /app100/);
 });
+
+test('without a bot the studio writes nothing', async () => {
+  const port = await freePort();
+  const proj = new Project(cloud, null, 'no-bot');
+  proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  // No token at all: nothing is linked.
+  const child = await startStudio(proj, port);
+  try {
+    const written = await api(port, '/api/file', { method: 'POST', body: { path: 'tgcloud/lib/x.js', content: 'x' } });
+    assert.equal(written.status, 400, written.text);
+    assert.match(written.json.error, /Link a bot first/);
+
+    const removed = await api(port, '/api/file', { method: 'DELETE', body: { path: 'tgcloud/handlers/message.js' } });
+    assert.equal(removed.status, 400, removed.text);
+
+    // And the files of a bot that was here before are not shown either.
+    const tree = await api(port, '/api/tree');
+    assert.equal(tree.status, 200, tree.text);
+    assert.deepEqual(tree.json.tree, [], 'no files without a bot');
+    const list = await api(port, '/api/list?path=tgcloud');
+    assert.deepEqual(list.json.entries, []);
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
+
+test('every bot has its own backups', async () => {
+  const port = await freePort();
+  const proj = new Project(cloud, null, 'backups-per-bot');
+  proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  const child = await startStudio(proj, port);
+  try {
+    await api(port, '/api/profiles', { method: 'POST', body: { token: tokenA, name: 'staging' } });
+    await api(port, '/api/profiles', { method: 'POST', body: { token: tokenB, name: 'production' } });
+
+    const staging = await api(port, '/api/backups', { method: 'POST', body: { label: 'staging copy' } });
+    assert.equal(staging.status, 200, staging.text);
+    assert.equal(staging.json.backups.length, 1);
+
+    await api(port, '/api/profiles/use', { method: 'POST', body: { name: 'production' } });
+    const production = await api(port, '/api/backups');
+    assert.equal(production.status, 200, production.text);
+    assert.deepEqual(production.json.backups, [], 'the other bot has no backups');
+
+    await api(port, '/api/profiles/use', { method: 'POST', body: { name: 'staging' } });
+    const back = await api(port, '/api/backups');
+    assert.equal(back.json.backups.length, 1, 'its own backup is there again');
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
+
+test('unlinking the last bot empties the folder', async () => {
+  const port = await freePort();
+  const proj = new Project(cloud, null, 'unlink-last');
+  proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  const child = await startStudio(proj, port);
+  try {
+    await api(port, '/api/profiles', { method: 'POST', body: { token: tokenA, name: 'staging' } });
+    assert.equal(proj.exists('tgcloud/handlers/message.js'), true);
+
+    await api(port, '/api/profiles', { method: 'DELETE', body: { name: 'staging' } });
+    assert.equal(proj.exists('tgcloud/handlers/message.js'), false, 'the files leave with the bot');
+    const backups = await api(port, '/api/backups');
+    assert.deepEqual(backups.json.backups, [], 'and no backups are left to show');
+  } finally {
+    child.kill('SIGTERM');
+  }
+});

@@ -113,6 +113,19 @@ export function restoreWorkspace(profile, root = process.cwd()) {
   return { files: [...known] };
 }
 
+// Empties the folder: there is no bot, so the folder has nothing to show.
+// The files are not lost — they stay in the workspace of the bot that left.
+export function clearWorkspace(root = process.cwd()) {
+  for (const rel of managedFiles(root)) {
+    try {
+      fs.rmSync(path.join(root, rel), { force: true });
+      removeEmptyParents(root, rel);
+    } catch {
+      /* a file that cannot be removed stays */
+    }
+  }
+}
+
 // Forgets a bot's copy completely.
 export function dropWorkspace(profile) {
   const dir = workspaceDir(profile);

@@ -1,13 +1,17 @@
 import fs from 'fs';
 import path from 'path';
 import { MODULE_ROOT } from './layout.js';
-import { ensureStateDir } from './state.js';
+import { ensureStateDir, profileStateDir, currentProfile } from './state.js';
 
 // Backups are safety nets: a copy of the code as it is right now, so a
 // change that breaks the bot can be undone with one click. They live inside
 // .tgpilot/ and are never deployed.
 
-export const BACKUP_DIR = path.join('.tgpilot', 'backups');
+// Every bot keeps its own backups: the copies of the code as it was when
+// that bot was the one you were working with.
+function backupDir(profile) {
+  return path.join(profileStateDir(profile || currentProfile()), 'backups');
+}
 
 function stamp() {
   const now = new Date();
@@ -66,8 +70,8 @@ function collectSources(root) {
   return [...new Set(files)];
 }
 
-export function listBackups(root = process.cwd()) {
-  const dir = path.join(root, BACKUP_DIR);
+export function listBackups(root = process.cwd(), profile) {
+  const dir = path.join(root, backupDir(profile));
   if (!fs.existsSync(dir)) return [];
   const entries = [];
   for (const name of fs.readdirSync(dir).sort().reverse()) {
@@ -85,10 +89,10 @@ export function listBackups(root = process.cwd()) {
 }
 
 // Takes a copy of the project. Returns the manifest of what was saved.
-export function createBackup(root = process.cwd(), { label = '', note = '' } = {}) {
+export function createBackup(root = process.cwd(), { label = '', note = '', profile } = {}) {
   const files = collectSources(root);
   const id = `${stamp()}-${safeName(label)}`;
-  const dir = path.join(root, BACKUP_DIR, id);
+  const dir = path.join(root, backupDir(profile), id);
   fs.mkdirSync(dir, { recursive: true });
 
   let bytes = 0;
@@ -119,8 +123,8 @@ export function createBackup(root = process.cwd(), { label = '', note = '' } = {
 
 // Puts a backup back on disk. The state right now is saved as a backup
 // first, so a restore can never destroy work.
-export function restoreBackup(root = process.cwd(), id, { keepCurrent = true } = {}) {
-  const dir = path.join(root, BACKUP_DIR, id);
+export function restoreBackup(root = process.cwd(), id, { keepCurrent = true, profile } = {}) {
+  const dir = path.join(root, backupDir(profile), id);
   const manifestPath = path.join(dir, 'manifest.json');
   if (!fs.existsSync(manifestPath)) {
     const err = new Error(`There is no backup called "${id}".`);
@@ -128,7 +132,7 @@ export function restoreBackup(root = process.cwd(), id, { keepCurrent = true } =
     throw err;
   }
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-  const safety = keepCurrent ? createBackup(root, { label: 'before restore' }) : null;
+  const safety = keepCurrent ? createBackup(root, { label: 'before restore', profile }) : null;
 
   const filesRoot = path.join(dir, 'files');
   const restored = [];
@@ -151,8 +155,8 @@ export function restoreBackup(root = process.cwd(), id, { keepCurrent = true } =
   return { manifest, restored, safety };
 }
 
-export function removeBackup(root = process.cwd(), id) {
-  const dir = path.join(root, BACKUP_DIR, id);
+export function removeBackup(root = process.cwd(), id, profile) {
+  const dir = path.join(root, backupDir(profile), id);
   if (!fs.existsSync(dir)) return false;
   fs.rmSync(dir, { recursive: true, force: true });
   return true;

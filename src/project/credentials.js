@@ -2,7 +2,7 @@ import fs from 'fs';
 import { loadCredentials, saveCredentials, deleteCredentials, ensureStateDir, loadProfiles, saveProfiles, setCurrentProfile, DEFAULT_PROFILE } from './state.js';
 import { fatal } from '../output.js';
 import { extractAppId, request } from '../api/client.js';
-import { saveWorkspace, restoreWorkspace } from './workspace.js';
+import { saveWorkspace, restoreWorkspace, clearWorkspace } from './workspace.js';
 import { plain } from '../colors.js';
 import { log } from '../logs.js';
 
@@ -112,8 +112,10 @@ export function removeProfile(name) {
   saveProfiles({ active: nextActive, profiles });
   setCurrentProfile(nextActive);
   if (active === name) {
-    // The bot is gone: its files leave the folder with it.
-    restoreWorkspace(nextActive);
+    // The bot is gone: its files leave the folder with it. Without another
+    // bot the folder is empty — the studio belongs to a bot.
+    if (nextActive) restoreWorkspace(nextActive);
+    else clearWorkspace();
   }
   return true;
 }
@@ -125,6 +127,14 @@ export function peekToken() {
     return isValidFormat(token) ? token : null;
   }
   return loadCredentials()?.token || null;
+}
+
+// Is there a bot to work with? A profile in this folder or a token from the
+// environment counts.
+export function hasLinkedBot() {
+  if (usedEnvName() && process.env[usedEnvName()]) return true;
+  const { active, profiles } = loadProfiles();
+  return Boolean(active && profiles[active]?.token);
 }
 
 export function isAuthError(err) {

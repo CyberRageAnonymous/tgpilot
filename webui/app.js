@@ -413,6 +413,9 @@ async function renderProfiles() {
       </div>`;
     })
     .join('');
+  for (const button of box.querySelectorAll('.no-bot-link')) {
+    button.onclick = () => $('dialog-link').showModal();
+  }
   for (const button of box.querySelectorAll('.profile-use')) {
     button.onclick = () => useProfile(button.dataset.name).catch(showError);
   }
@@ -478,6 +481,29 @@ function renderHelp() {
   }
   $('help-body').innerHTML = parts.join('');
   $('help-title').textContent = sections[0]?.title || t('help.title');
+}
+
+// Without a linked bot the studio explains what to do instead of showing
+// somebody else's files.
+function noBotNotice() {
+  return `<div class="no-bot">
+    <div class="no-bot-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.4 18.6h9.4a3.85 3.85 0 0 0 .5-7.65 5.5 5.5 0 0 0-10.5-1.15 3.9 3.9 0 0 0 .6 8.8z"/><path d="M12 17.2v-6.6M9.5 13.1 12 10.6l2.5 2.5"/></svg></div>
+    <div class="no-bot-title">Link a bot first</div>
+    <div class="no-bot-text">The studio works with a bot in mind: its code, its files and its backups live here. Link one and this folder is yours.</div>
+    <button class="primary small no-bot-link">Link a bot</button>
+  </div>`;
+}
+
+// The editor and the file buttons follow the same rule.
+function applyBotState() {
+  const linked = Boolean(state.token);
+  $('btn-new-module').disabled = !linked;
+  $('btn-new-file').disabled = !linked;
+  if (!linked) {
+    $('editor').disabled = true;
+    $('btn-save').disabled = true;
+    $('btn-delete').disabled = true;
+  }
 }
 
 // --- settings ----------------------------------------------------------------
@@ -674,6 +700,7 @@ async function refreshProject() {
   $('btn-profile').classList.toggle('linked', Boolean(token));
   $('btn-unlink').hidden = !token;
   $('btn-link').hidden = Boolean(token);
+  applyBotState();
   $('hero-bot').textContent = token ? `bot ${token.masked}` : 'not linked yet — press Link in the corner';
 }
 
@@ -797,6 +824,14 @@ async function createSchema() {
 // --- sections ----------------------------------------------------------------
 
 async function openSection(key) {
+  if (!state.token && key !== 'deploy' && key !== 'help' && key !== 'settings') {
+    // Without a bot there is no folder to work in.
+    show('files');
+    $('folder-crumb').textContent = '';
+    $('folder-list').innerHTML = noBotNotice();
+    $('migrate-actions');
+    return;
+  }
   if (key === 'deploy') {
     show('deploy');
     startSyncWatcher();

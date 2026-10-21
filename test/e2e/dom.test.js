@@ -58,3 +58,15 @@ test('every icon in the page is a well-formed drawing', async () => {
     assert.doesNotMatch(logo, /NaN|undefined/, 'the logo has no broken numbers');
   }
 });
+
+test('the studio asks for a bot instead of showing files', async () => {
+  const fs = await import('node:fs');
+  const app = fs.readFileSync(path.join(root, 'webui', 'app.js'), 'utf-8');
+  // Without a bot the file list is replaced by the invitation to link one.
+  assert.match(app, /function noBotNotice\(\)/, 'there is a notice for the case');
+  assert.match(app, /innerHTML = noBotNotice\(\)/, 'and it is used');
+  assert.match(app, /Link a bot first/, 'it says what to do');
+  // And the editor is closed as well.
+  assert.match(app, /function applyBotState\(\)/, 'the editor follows the same rule');
+  assert.match(app, /\$\('editor'\)\.disabled = true/, 'the editor cannot be written in');
+});

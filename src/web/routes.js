@@ -4,7 +4,7 @@ import { createProjectFs } from './projectfs.js';
 import { syncCapabilities, moduleDirs, runnableDirs, scaffoldEntries, findDisallowedModules } from '../project/layout.js';
 import { scanFiles, findStrayFiles } from '../project/scanner.js';
 import { localDiff } from '../project/diff.js';
-import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot, listProfiles, activeProfile, useProfile, saveProfileToken, removeProfile } from '../project/credentials.js';
+import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot, listProfiles, activeProfile, useProfile, saveProfileToken, removeProfile, hasLinkedBot } from '../project/credentials.js';
 import { planPush, makeStaticPlan, settleRevision, sendDeploy, absorbResponse, isRevisionMismatch } from '../project/deploy.js';
 import { runFunction, getWebhook, syncWebhook, getMigrationStatus, applyMigration, getFiles } from '../api/endpoints.js';
 import { replaceSnapshot, readSnapshotFile, snapshotExists, pathToModule } from '../project/snapshot.js';
@@ -267,6 +267,8 @@ async function handleProjectInfo(project) {
 }
 
 function handleTree(project) {
+  // Without a bot the folder belongs to nobody: there is nothing to show.
+  if (!hasLinkedBot()) return { ok: true, tree: [] };
   // Each node carries its project-relative path so the UI needs no DOM
   // guessing to open or save a file.
   const walk = (rel, depth) => project
@@ -281,6 +283,7 @@ function handleTree(project) {
 }
 
 function handleList(project, query) {
+  if (!hasLinkedBot()) return { ok: true, entries: [] };
   // One flat folder listing for the studio's section views; '' is the root.
   const rel = query?.get('path') || '';
   return { ok: true, path: rel, entries: project.list(rel) };
@@ -303,6 +306,8 @@ function handleFileRead(project, query) {
 }
 
 async function handleFileWrite(project, body) {
+  // The studio works for a bot: without one there is no folder to write in.
+  if (!hasLinkedBot()) throw badRequest('Link a bot first — the studio works with a bot in mind.', 'no-bot');
   if (!body || typeof body.path !== 'string') throw badRequest('Missing "path"');
   if (typeof body.content !== 'string') throw badRequest('Missing "content"');
   project.write(body.path, body.content);
@@ -310,6 +315,7 @@ async function handleFileWrite(project, body) {
 }
 
 function handleFileDelete(project, body) {
+  if (!hasLinkedBot()) throw badRequest('Link a bot first — the studio works with a bot in mind.', 'no-bot');
   if (!body || typeof body.path !== 'string') throw badRequest('Missing "path"');
   project.remove(body.path);
   return { ok: true };
