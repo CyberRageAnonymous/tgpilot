@@ -2,6 +2,7 @@ import fs from 'fs';
 import { loadCredentials, saveCredentials, deleteCredentials, ensureStateDir, loadProfiles, saveProfiles, setCurrentProfile, DEFAULT_PROFILE } from './state.js';
 import { fatal } from '../output.js';
 import { extractAppId, request } from '../api/client.js';
+import { saveWorkspace, restoreWorkspace } from './workspace.js';
 import { plain } from '../colors.js';
 import { log } from '../logs.js';
 
@@ -69,11 +70,19 @@ export function listProfiles() {
 }
 
 export function useProfile(name) {
-  const { profiles } = loadProfiles();
+  const { active, profiles } = loadProfiles();
   if (!profiles[name]) return false;
+  if (active && active !== name) {
+    // The folder belongs to the bot that is leaving: keep its files.
+    saveWorkspace(active);
+  }
   saveProfiles({ active: name, profiles });
   // The state and the snapshot of the bot that is now active.
   setCurrentProfile(name);
+  if (active !== name) {
+    // And the files of the bot that is arriving take their place.
+    restoreWorkspace(name);
+  }
   return true;
 }
 
@@ -82,8 +91,16 @@ export function saveProfileToken(name, token, label = '') {
   const { active, profiles } = loadProfiles();
   const key = name || DEFAULT_PROFILE;
   profiles[key] = { token, label: label || profiles[key]?.label || '' };
-  saveProfiles({ active: key, profiles });
-  setCurrentProfile(key);
+  if (!active) {
+    // The first bot takes over the folder as it is right now.
+    saveWorkspace(key);
+    saveProfiles({ active: key, profiles });
+    setCurrentProfile(key);
+    return key;
+  }
+  // Another bot joins the folder: it is linked but not switched to, so the
+  // folder keeps the files of the bot that is active.
+  saveProfiles({ active, profiles });
   return key;
 }
 
@@ -94,6 +111,10 @@ export function removeProfile(name) {
   const nextActive = active === name ? Object.keys(profiles)[0] || null : active;
   saveProfiles({ active: nextActive, profiles });
   setCurrentProfile(nextActive);
+  if (active === name) {
+    // The bot is gone: its files leave the folder with it.
+    restoreWorkspace(nextActive);
+  }
   return true;
 }
 

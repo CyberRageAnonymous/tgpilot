@@ -147,8 +147,11 @@ notes) are never touched, and a backup is taken before anything is written.
 tgpilot pull       # the same thing in the terminal
 ```
 
-Every bot in a folder keeps its own snapshot and state, so switching between
-them shows the right world.
+Every bot in a folder keeps its own snapshot, its own state and its own copy
+of the code. The folder you see belongs to the bot that is active: switching
+brings that bot's files in and puts the others away, and unlinking a bot takes
+its files out of the folder with it. Linking a second bot does not touch the
+folder — it only joins.
 
 ## The web studio
 
