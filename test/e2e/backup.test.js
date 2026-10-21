@@ -95,7 +95,7 @@ test('backups stay out of the deployed code', async () => {
   proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
   const taken = await proj.cli(['backup']);
   assert.equal(taken.code, 0, taken.out);
-  const dir = path.join(proj.dir, '.tgpilot', 'profiles', 'default', 'backups');
+  const dir = path.join(proj.dir, '.tgpilot', 'backups');
   assert.ok(fs.existsSync(dir));
   // The backup is a copy of the project, not a part of it.
   const manifest = JSON.parse(fs.readFileSync(path.join(dir, fs.readdirSync(dir)[0], 'manifest.json'), 'utf-8'));

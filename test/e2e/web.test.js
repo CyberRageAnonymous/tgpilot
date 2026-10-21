@@ -243,3 +243,29 @@ test('a cloud failure comes back as a report with the file that failed', async (
     child.kill('SIGTERM');
   }
 });
+
+test('without a bot the studio shows nothing and writes nothing', async () => {
+  const port = await freePort();
+  const bare = new Project(cloud, null, 'bare-bot');
+  bare.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  const child = await startStudio(bare, port);
+  try {
+    // Nothing is linked: the folder belongs to nobody.
+    const tree = await api(port, '/api/tree');
+    assert.equal(tree.status, 200, tree.text);
+    assert.deepEqual(tree.json.tree, [], 'no files are shown');
+
+    const list = await api(port, '/api/list?path=tgcloud');
+    assert.equal(list.status, 200, list.text);
+    assert.deepEqual(list.json.entries, []);
+
+    const written = await api(port, '/api/file', { method: 'POST', body: { path: 'tgcloud/lib/x.js', content: 'x' } });
+    assert.equal(written.status, 400, written.text);
+    assert.match(written.json.error, /Link a bot first/);
+
+    const removed = await api(port, '/api/file', { method: 'DELETE', body: { path: 'tgcloud/handlers/message.js' } });
+    assert.equal(removed.status, 400, removed.text);
+  } finally {
+    child.kill('SIGTERM');
+  }
+});

@@ -13,7 +13,7 @@
   <div class="bot-state">
     <button id="btn-settings" class="ghost small" data-i18n="app.settings">Settings</button>
     <button id="btn-help" class="ghost small" data-i18n="app.help">Help</button>
-    <button id="btn-profile" class="token-chip" data-i18n="app.notLinked">not linked</button>
+    <span id="bot-token" class="token-chip">not linked</span>
     <button id="btn-link" class="ghost small" data-i18n="app.link">Link</button>
     <button id="btn-unlink" class="ghost small" hidden data-i18n="app.unlink">Unlink</button>
   </div>
@@ -427,26 +427,6 @@
     <button class="ghost" data-close data-i18n="common.cancel">Cancel</button>
     <button id="btn-sync-apply" class="primary" data-i18n="sync.apply">Sync</button>
   </div>
-</dialog>
-
-<dialog id="dialog-profiles" class="dialog dialog-narrow">
-  <div class="dialog-head"><h3 data-i18n="profiles.title">Bots in this folder</h3><button class="ghost small" data-close>×</button></div>
-  <div class="dialog-body">
-    <p class="hint" data-i18n="profiles.text">A folder can talk to more than one bot.</p>
-    <div id="profile-list" class="file-list"></div>
-    <div class="stack">
-      <label class="field">
-        <span class="field-label" data-i18n="profiles.linkToken">access token</span>
-        <input id="profile-token" type="password" spellcheck="false" placeholder="access token from @BotFather">
-      </label>
-      <label class="field">
-        <span class="field-label" data-i18n="profiles.name">Name</span>
-        <input id="profile-name" type="text" spellcheck="false" placeholder="staging">
-      </label>
-      <button id="btn-profile-link" class="primary small" data-i18n="profiles.link">Link this bot</button>
-    </div>
-  </div>
-  <div class="dialog-actions"><button class="ghost" data-close data-i18n="common.close">Close</button></div>
 </dialog>
 
 <dialog id="dialog-backup" class="dialog dialog-narrow">

@@ -4,7 +4,7 @@ import { createProjectFs } from './projectfs.js';
 import { syncCapabilities, moduleDirs, runnableDirs, scaffoldEntries, findDisallowedModules } from '../project/layout.js';
 import { scanFiles, findStrayFiles } from '../project/scanner.js';
 import { localDiff } from '../project/diff.js';
-import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot, listProfiles, activeProfile, useProfile, saveProfileToken, removeProfile, hasLinkedBot } from '../project/credentials.js';
+import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot, hasLinkedBot } from '../project/credentials.js';
 import { planPush, makeStaticPlan, settleRevision, sendDeploy, absorbResponse, isRevisionMismatch } from '../project/deploy.js';
 import { runFunction, getWebhook, syncWebhook, getMigrationStatus, applyMigration, getFiles } from '../api/endpoints.js';
 import { replaceSnapshot, readSnapshotFile, snapshotExists, pathToModule } from '../project/snapshot.js';
@@ -53,12 +53,8 @@ export function createRoutes(root, uiDir) {
     ['GET /api/schema', () => handleSchemaDiff()],
     ['GET /api/logs', (body, query) => handleLogsGet(query)],
     ['DELETE /api/logs', () => handleLogsClear()],
-    ['GET /api/profiles', () => handleProfilesGet()],
     ['POST /api/sync/preview', () => handleSyncPreview()],
     ['POST /api/sync/apply', (body) => handleSyncApply(body)],
-    ['POST /api/profiles/use', (body) => handleProfileUse(body)],
-    ['POST /api/profiles', (body) => handleProfileLink(body)],
-    ['DELETE /api/profiles', (body) => handleProfileDelete(body)],
     ['GET /api/backups', () => handleBackupsGet(project)],
     ['POST /api/backups', (body) => handleBackupCreate(project, body)],
     ['POST /api/backups/restore', (body) => handleBackupRestore(project, body)],
@@ -617,48 +613,6 @@ async function handleSyncApply(body) {
     deleted: result.deleted.length,
   });
   return { ok: true, preview, written: result.written, deleted: result.deleted, safety: result.safety };
-}
-
-// Profiles: the bots this folder is linked to. One folder can hold several
-// — a staging bot next to the production one.
-function handleProfilesGet() {
-  const profiles = listProfiles();
-  return {
-    ok: true,
-    active: activeProfile(),
-    profiles: profiles.map((profile) => ({
-      name: profile.name,
-      label: profile.label,
-      masked: profile.token ? maskToken(profile.token) : null,
-      active: profile.active,
-    })),
-  };
-}
-
-async function handleProfileLink(body) {
-  const raw = String(body?.token || '').trim();
-  if (!raw) throw badRequest('Missing "token"');
-  const name = String(body?.name || '').trim() || 'default';
-  const check = await verifyToken(raw);
-  if (!check.ok && !check.network) {
-    throw badRequest('The server rejected that token. Get a fresh one from @BotFather (bot → Serverless → CLI Access).', 'rejected');
-  }
-  saveProfileToken(name, raw, String(body?.label || '').trim());
-  log('info', 'login', 'Profile linked from the studio.', { profile: name, token: maskToken(raw) });
-  return handleProfilesGet();
-}
-
-function handleProfileUse(body) {
-  const name = String(body?.name || '').trim();
-  if (!useProfile(name)) throw badRequest(`There is no profile called "${name}".`);
-  log('info', 'login', 'Profile switched in the studio.', { profile: name });
-  return handleProfilesGet();
-}
-
-function handleProfileDelete(body) {
-  const name = String(body?.name || '').trim();
-  if (!removeProfile(name)) throw badRequest(`There is no profile called "${name}".`);
-  return handleProfilesGet();
 }
 
 // Backups: a copy of the project as it works right now, so a broken change

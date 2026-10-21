@@ -45,11 +45,6 @@ export const HELP = {
       code: 'tgpilot backup\ntgpilot backups\ntgpilot restore <id>',
     },
     {
-      title: 'Several bots in one folder',
-      text: 'A folder can be linked to more than one bot — a staging copy next to the live one. Press the bot name in the top bar to link, switch or remove a profile.',
-      code: 'tgpilot login --profile staging <token>\ntgpilot profiles --use staging',
-    },
-    {
       title: 'When the cloud cannot be reached',
       text: 'The Network card says how this machine reaches the cloud: the proxy that is running, the DNS answer and the route. If telegram.org is blocked on your network, point tgpilot at a proxy — HTTP or SOCKS5, the kind is detected on its own.',
       code: 'export TGPILOT_PROXY=socks5://127.0.0.1:10808\ntgpilot ping',
@@ -120,11 +115,6 @@ export const HELP = {
       title: 'بکاپ‌ها',
       text: 'قبل از هر تغییر بزرگ یک کپی از پروژه بگیر. اگر ربات خراب شد، با یک کلیک برگردانش — وضعیت همان لحظه خودش یک بکاپ می‌شود، پس بازگردانی هیچ‌وقت کارت را نمی‌خورد.',
       code: 'tgpilot backup\ntgpilot backups\ntgpilot restore <id>',
-    },
-    {
-      title: 'چند ربات در یک پوشه',
-      text: 'یک پوشه می‌تواند به چند ربات وصل باشد — یک کپی تست کنار ربات اصلی. روی نام ربات در نوار بالا بزن تا لینک، تعویض یا حذف کنی.',
-      code: 'tgpilot login --profile staging <token>\ntgpilot profiles --use staging',
     },
     {
       title: 'وقتی کلود در دسترس نیست',
@@ -199,11 +189,6 @@ export const HELP = {
       code: 'tgpilot backup\ntgpilot backups\ntgpilot restore <id>',
     },
     {
-      title: '一个文件夹多个机器人',
-      text: '一个文件夹可以连接多个机器人 —— 正式版旁边放一个测试版。点顶栏的机器人名字可以连接、切换或删除。',
-      code: 'tgpilot login --profile staging <token>\ntgpilot profiles --use staging',
-    },
-    {
       title: '连不上云端时',
       text: '「网络」卡片会说明这台机器如何连到云端：正在运行的代理、DNS 的回答和路由。如果你的网络屏蔽了 telegram.org，就给 tgpilot 指一个代理 —— HTTP 或 SOCKS5 都行，类型会自动识别。',
       code: 'export TGPILOT_PROXY=socks5://127.0.0.1:10808\ntgpilot ping',
@@ -274,11 +259,6 @@ export const HELP = {
       title: 'Резервные копии',
       text: 'Сохраните копию проекта перед большим изменением. Если бот сломается, верните всё одним щелчком — состояние на тот момент сохраняется отдельной копией, так что восстановление ничего не уничтожит.',
       code: 'tgpilot backup\ntgpilot backups\ntgpilot restore <id>',
-    },
-    {
-      title: 'Несколько ботов в одной папке',
-      text: 'Папку можно связать с несколькими ботами — тестовая копия рядом с боевой. Нажмите имя бота в верхней панели, чтобы связать, переключить или удалить профиль.',
-      code: 'tgpilot login --profile staging <token>\ntgpilot profiles --use staging',
     },
     {
       title: 'Когда облако недоступно',

@@ -32,7 +32,7 @@ test('login accepts a pasted token, links the folder, and logout forgets it', as
 
   const out = await proj.cli(['logout']);
   assert.equal(out.code, 0, out.out);
-  assert.match(out.out, /Token for profile "default" removed/);
+  assert.match(out.out, /Token for app100 removed/);
   assert.equal(proj.exists('.tgpilot/credentials'), false);
   assert.match((await proj.cli(['logout'])).out, /Nothing to forget/);
 });

@@ -83,7 +83,7 @@ test('the sync takes a backup that can be restored', async () => {
     const backupId = applied.json.safety?.id;
     assert.ok(backupId, 'the sync names its backup');
 
-    const dir = path.join(proj.dir, '.tgpilot', 'profiles', 'default', 'backups', backupId, 'manifest.json');
+    const dir = path.join(proj.dir, '.tgpilot', 'backups', backupId, 'manifest.json');
     assert.ok(fs.existsSync(dir));
   } finally {
     child.kill('SIGTERM');
