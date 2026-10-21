@@ -4,7 +4,7 @@ import { createProjectFs } from './projectfs.js';
 import { syncCapabilities, moduleDirs, runnableDirs, scaffoldEntries, findDisallowedModules } from '../project/layout.js';
 import { scanFiles, findStrayFiles } from '../project/scanner.js';
 import { localDiff } from '../project/diff.js';
-import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot, listProfiles, activeProfile, useProfile, saveProfileToken, removeProfile } from '../project/credentials.js';
+import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot, hasLinkedBot } from '../project/credentials.js';
 import { planPush, makeStaticPlan, settleRevision, sendDeploy, absorbResponse, isRevisionMismatch } from '../project/deploy.js';
 import { runFunction, getWebhook, syncWebhook, getMigrationStatus, applyMigration, getFiles } from '../api/endpoints.js';
 import { replaceSnapshot, readSnapshotFile, snapshotExists, pathToModule } from '../project/snapshot.js';
@@ -16,7 +16,7 @@ import { changeCard, changeId } from '../project/changes.js';
 import { serverErrorText, requestPublic, invalidateNetworkCache } from '../api/client.js';
 import { networkConfig, saveNetworkConfig, diagnose } from '../project/network.js';
 import { createBackup, listBackups, restoreBackup, removeBackup } from '../project/backup.js';
-import { previewSync, applySync } from '../project/sync.js';
+import { previewSync, applySync, pullFromCloud } from '../project/sync.js';
 import { log, readLogs, clearLogs, LEVELS } from '../logs.js';
 import { moduleStarter, UPDATE_TYPES, SCHEMA_STARTER } from '../templates.js';
 import { parse } from '../json5.js';
@@ -53,12 +53,8 @@ export function createRoutes(root, uiDir) {
     ['GET /api/schema', () => handleSchemaDiff()],
     ['GET /api/logs', (body, query) => handleLogsGet(query)],
     ['DELETE /api/logs', () => handleLogsClear()],
-    ['GET /api/profiles', () => handleProfilesGet()],
     ['POST /api/sync/preview', () => handleSyncPreview()],
     ['POST /api/sync/apply', (body) => handleSyncApply(body)],
-    ['POST /api/profiles/use', (body) => handleProfileUse(body)],
-    ['POST /api/profiles', (body) => handleProfileLink(body)],
-    ['DELETE /api/profiles', (body) => handleProfileDelete(body)],
     ['GET /api/backups', () => handleBackupsGet(project)],
     ['POST /api/backups', (body) => handleBackupCreate(project, body)],
     ['POST /api/backups/restore', (body) => handleBackupRestore(project, body)],
@@ -267,6 +263,8 @@ async function handleProjectInfo(project) {
 }
 
 function handleTree(project) {
+  // Without a bot the folder belongs to nobody: there is nothing to show.
+  if (!hasLinkedBot()) return { ok: true, tree: [] };
   // Each node carries its project-relative path so the UI needs no DOM
   // guessing to open or save a file.
   const walk = (rel, depth) => project
@@ -281,6 +279,7 @@ function handleTree(project) {
 }
 
 function handleList(project, query) {
+  if (!hasLinkedBot()) return { ok: true, entries: [] };
   // One flat folder listing for the studio's section views; '' is the root.
   const rel = query?.get('path') || '';
   return { ok: true, path: rel, entries: project.list(rel) };
@@ -303,6 +302,8 @@ function handleFileRead(project, query) {
 }
 
 async function handleFileWrite(project, body) {
+  // The studio works for a bot: without one there is no folder to write in.
+  if (!hasLinkedBot()) throw badRequest('Link a bot first — the studio works with a bot in mind.', 'no-bot');
   if (!body || typeof body.path !== 'string') throw badRequest('Missing "path"');
   if (typeof body.content !== 'string') throw badRequest('Missing "content"');
   project.write(body.path, body.content);
@@ -310,6 +311,7 @@ async function handleFileWrite(project, body) {
 }
 
 function handleFileDelete(project, body) {
+  if (!hasLinkedBot()) throw badRequest('Link a bot first — the studio works with a bot in mind.', 'no-bot');
   if (!body || typeof body.path !== 'string') throw badRequest('Missing "path"');
   project.remove(body.path);
   return { ok: true };
@@ -390,9 +392,30 @@ async function handleBotLink(body) {
   }
   saveCredentials(raw);
   log('info', 'login', 'Project linked from the studio.', { token: maskToken(raw) });
+
+  // The bot's code belongs in the folder: bring it in, so the studio shows
+  // what the bot runs and you can edit it right away.
+  let brought = [];
+  if (check.ok) {
+    try {
+      const remote = await getFiles(raw);
+      brought = pullFromCloud(remote.canonical_modules || {}).written;
+      if (remote.revision != null) {
+        const state = loadState();
+        state.last_known_revision = remote.revision;
+        saveState(state);
+      }
+    } catch (err) {
+      log('warn', 'login', 'The bot was linked, but its files could not be fetched.', {
+        error: err?.message || String(err),
+      });
+    }
+  }
+
   return {
     ok: true,
     token: { masked: maskToken(raw), unverified: check.network || undefined },
+    brought: brought.length,
   };
 }
 
@@ -611,48 +634,6 @@ async function handleSyncApply(body) {
     deleted: result.deleted.length,
   });
   return { ok: true, preview, written: result.written, deleted: result.deleted, safety: result.safety };
-}
-
-// Profiles: the bots this folder is linked to. One folder can hold several
-// — a staging bot next to the production one.
-function handleProfilesGet() {
-  const profiles = listProfiles();
-  return {
-    ok: true,
-    active: activeProfile(),
-    profiles: profiles.map((profile) => ({
-      name: profile.name,
-      label: profile.label,
-      masked: profile.token ? maskToken(profile.token) : null,
-      active: profile.active,
-    })),
-  };
-}
-
-async function handleProfileLink(body) {
-  const raw = String(body?.token || '').trim();
-  if (!raw) throw badRequest('Missing "token"');
-  const name = String(body?.name || '').trim() || 'default';
-  const check = await verifyToken(raw);
-  if (!check.ok && !check.network) {
-    throw badRequest('The server rejected that token. Get a fresh one from @BotFather (bot → Serverless → CLI Access).', 'rejected');
-  }
-  saveProfileToken(name, raw, String(body?.label || '').trim());
-  log('info', 'login', 'Profile linked from the studio.', { profile: name, token: maskToken(raw) });
-  return handleProfilesGet();
-}
-
-function handleProfileUse(body) {
-  const name = String(body?.name || '').trim();
-  if (!useProfile(name)) throw badRequest(`There is no profile called "${name}".`);
-  log('info', 'login', 'Profile switched in the studio.', { profile: name });
-  return handleProfilesGet();
-}
-
-function handleProfileDelete(body) {
-  const name = String(body?.name || '').trim();
-  if (!removeProfile(name)) throw badRequest(`There is no profile called "${name}".`);
-  return handleProfilesGet();
 }
 
 // Backups: a copy of the project as it works right now, so a broken change

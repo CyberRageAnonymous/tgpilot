@@ -243,3 +243,56 @@ test('a cloud failure comes back as a report with the file that failed', async (
     child.kill('SIGTERM');
   }
 });
+
+test('without a bot the studio shows nothing and writes nothing', async () => {
+  const port = await freePort();
+  const bare = new Project(cloud, null, 'bare-bot');
+  bare.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  const child = await startStudio(bare, port);
+  try {
+    // Nothing is linked: the folder belongs to nobody.
+    const tree = await api(port, '/api/tree');
+    assert.equal(tree.status, 200, tree.text);
+    assert.deepEqual(tree.json.tree, [], 'no files are shown');
+
+    const list = await api(port, '/api/list?path=tgcloud');
+    assert.equal(list.status, 200, list.text);
+    assert.deepEqual(list.json.entries, []);
+
+    const written = await api(port, '/api/file', { method: 'POST', body: { path: 'tgcloud/lib/x.js', content: 'x' } });
+    assert.equal(written.status, 400, written.text);
+    assert.match(written.json.error, /Link a bot first/);
+
+    const removed = await api(port, '/api/file', { method: 'DELETE', body: { path: 'tgcloud/handlers/message.js' } });
+    assert.equal(removed.status, 400, removed.text);
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
+
+test('linking a bot brings its files into the folder', async () => {
+  const port = await freePort();
+  const token = cloud.mintToken();
+  const fresh = new Project(cloud, token, 'link-files');
+  fresh.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+
+  const child = await startStudio(fresh, port);
+  try {
+    // The bot of this token already runs a module; the folder knows nothing
+    // about it.
+    const bot = cloud.bots.get(token.split(':')[0]);
+    bot.modules.set('handlers/callback_query', 'export default async function (cb, ctx) { return 2; }\n');
+
+    const linked = await api(port, '/api/bot', { method: 'POST', body: { token } });
+    assert.equal(linked.status, 200, linked.text);
+    assert.ok(linked.json.brought >= 1, 'the studio reports the files it brought in');
+
+    // And the file is really in the folder now.
+    const list2 = await api(port, '/api/list?path=tgcloud/handlers');
+    assert.equal(list2.status, 200, list2.text);
+    const names = list2.json.entries.map((e) => e.name);
+    assert.ok(names.includes('callback_query.js'), names.join(','));
+  } finally {
+    child.kill('SIGTERM');
+  }
+});

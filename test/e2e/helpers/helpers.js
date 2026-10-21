@@ -76,18 +76,8 @@ export class Project {
     return fs.existsSync(path.join(this.dir, rel));
   }
 
-  // The state of a bot lives with that bot's profile.
-  state(profile = 'default') {
-    return JSON.parse(this.read(path.join('.tgpilot', 'profiles', profile, 'state.json')));
-  }
-
-  statePath(profile = 'default') {
-    return path.join('.tgpilot', 'profiles', profile, 'state.json');
-  }
-
-  // The snapshot of a bot lives with that bot's profile too.
-  snapshotPath(profile = 'default') {
-    return path.join('.tgpilot', 'profiles', profile, 'snapshot');
+  state() {
+    return JSON.parse(this.read(path.join('.tgpilot', 'state.json')));
   }
 }
 

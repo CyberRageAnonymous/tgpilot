@@ -7,7 +7,8 @@ import { ensureStateDir } from './state.js';
 // change that breaks the bot can be undone with one click. They live inside
 // .tgpilot/ and are never deployed.
 
-export const BACKUP_DIR = path.join('.tgpilot', 'backups');
+// The backups live next to the other local state and are never deployed.
+const BACKUP_DIR = path.join('.tgpilot', 'backups');
 
 function stamp() {
   const now = new Date();

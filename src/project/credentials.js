@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { loadCredentials, saveCredentials, deleteCredentials, ensureStateDir, loadProfiles, saveProfiles, setCurrentProfile, DEFAULT_PROFILE } from './state.js';
+import { loadCredentials, saveCredentials, deleteCredentials, ensureStateDir } from './state.js';
 import { fatal } from '../output.js';
 import { extractAppId, request } from '../api/client.js';
 import { plain } from '../colors.js';
@@ -40,62 +40,12 @@ export function resolveToken() {
     return token;
   }
 
-  const token = activeToken();
-  if (token) return token;
+  const creds = loadCredentials();
+  if (creds?.token) return creds.token;
 
   fatal('No access token for this project yet. Run "tgpilot login", or set TGPILOT_TOKEN (handy in CI).');
 }
 
-// The token of the profile that is active right now. Profiles let one folder
-// talk to several bots; the active one decides.
-export function activeProfile() {
-  return loadProfiles().active;
-}
-
-export function activeToken() {
-  const { active, profiles } = loadProfiles();
-  if (active && profiles[active]?.token) return profiles[active].token;
-  return loadCredentials()?.token || null;
-}
-
-export function listProfiles() {
-  const { active, profiles } = loadProfiles();
-  return Object.entries(profiles).map(([name, entry]) => ({
-    name,
-    label: entry.label || '',
-    token: entry.token || '',
-    active: name === active,
-  }));
-}
-
-export function useProfile(name) {
-  const { profiles } = loadProfiles();
-  if (!profiles[name]) return false;
-  saveProfiles({ active: name, profiles });
-  // The state and the snapshot of the bot that is now active.
-  setCurrentProfile(name);
-  return true;
-}
-
-// Stores a token under a profile name and makes it the active one.
-export function saveProfileToken(name, token, label = '') {
-  const { active, profiles } = loadProfiles();
-  const key = name || DEFAULT_PROFILE;
-  profiles[key] = { token, label: label || profiles[key]?.label || '' };
-  saveProfiles({ active: key, profiles });
-  setCurrentProfile(key);
-  return key;
-}
-
-export function removeProfile(name) {
-  const { active, profiles } = loadProfiles();
-  if (!profiles[name]) return false;
-  delete profiles[name];
-  const nextActive = active === name ? Object.keys(profiles)[0] || null : active;
-  saveProfiles({ active: nextActive, profiles });
-  setCurrentProfile(nextActive);
-  return true;
-}
 
 export function peekToken() {
   const envName = usedEnvName();
@@ -104,6 +54,12 @@ export function peekToken() {
     return isValidFormat(token) ? token : null;
   }
   return loadCredentials()?.token || null;
+}
+
+// Is there a bot to work with? A saved token or one from the environment.
+export function hasLinkedBot() {
+  if (usedEnvName() && process.env[usedEnvName()]) return true;
+  return Boolean(loadCredentials()?.token);
 }
 
 export function isAuthError(err) {
@@ -155,22 +111,21 @@ export async function verifyToken(token) {
 
 // Shared tail of both login paths: check the candidate, save it if the server
 // takes it (or cannot be reached), and say what happened.
-export async function loginWithToken(token, profile = '') {
+export async function loginWithToken(token) {
   if (!isValidFormat(token)) {
     console.error('  That does not look like an access token — expected "app<id>:<secret>".');
     return null;
   }
 
   const check = await verifyToken(token);
-  const target = profile || activeProfile() || DEFAULT_PROFILE;
   if (check.ok) {
-    saveProfileToken(target, token);
+    saveCredentials(token);
     console.log(`  Linked to ${maskToken(token)}.`);
     log('info', 'login', 'Project linked to a bot.', { token: maskToken(token) });
     return token;
   }
   if (check.network) {
-    saveProfileToken(target, token);
+    saveCredentials(token);
     console.log('  The server is unreachable, so the token was saved without verification.');
     console.log('  The next online command will confirm it.');
     log('warn', 'login', 'Token saved but not verified (network unreachable).', { token: maskToken(token) });
@@ -183,8 +138,8 @@ export async function loginWithToken(token, profile = '') {
 // Loops until a working token is saved, the terminal closes, or the user is
 // done. `preset` short-circuits the prompt (a token handed to "login" on the
 // command line); the TTY check only applies when something has to be asked.
-export async function loginInteractive(prompt, preset, profile = '') {
-  if (preset !== undefined) return loginWithToken(String(preset).trim(), profile);
+export async function loginInteractive(prompt, preset) {
+  if (preset !== undefined) return loginWithToken(String(preset).trim());
 
   if (process.stdin.isTTY !== true) {
     console.error('"tgpilot login" needs an interactive terminal. For scripts, set TGPILOT_TOKEN instead.');
@@ -214,18 +169,12 @@ export async function loginInteractive(prompt, preset, profile = '') {
       continue;
     }
 
-    const linked = await loginWithToken(token, profile);
+    const linked = await loginWithToken(token);
     if (linked) return linked;
   }
 }
 
 export function unlinkBot() {
-  const { active, profiles } = loadProfiles();
-  if (active && profiles[active]) {
-    removeProfile(active);
-    ensureStateDir();
-    return true;
-  }
   if (loadCredentials() == null) return false;
   deleteCredentials();
   ensureStateDir();

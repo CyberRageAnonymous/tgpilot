@@ -716,3 +716,31 @@ html[data-theme="light"] {
 }
 .sync-banner[hidden] { display: none; }
 .sync-banner-text { flex: 1; min-width: 180px; font-size: 13px; color: var(--text); }
+
+/* --- without a bot ---------------------------------------------------------- */
+
+.no-bot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 34px 22px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, .015);
+  margin: 6px;
+}
+.no-bot-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(110, 168, 255, .2);
+}
+.no-bot-title { font-size: 15px; font-weight: 650; }
+.no-bot-text { max-width: 340px; font-size: 12.5px; color: var(--dim); line-height: 1.6; }
+.no-bot-link { margin-top: 4px; }

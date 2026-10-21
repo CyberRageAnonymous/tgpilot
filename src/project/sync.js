@@ -68,3 +68,20 @@ export function applySync(canonical, { backup = true, removeMissing = true } = {
   replaceSnapshot(modules);
   return { written, deleted, safety };
 }
+
+// Brings the bot's files into the folder without touching anything else
+// that is there: this is what happens when a bot is linked, so its code is
+// in front of you, ready to be edited.
+export function pullFromCloud(canonical, { root = process.cwd() } = {}) {
+  const modules = canonical || {};
+  const written = [];
+  for (const [name, content] of Object.entries(modules)) {
+    const rel = moduleToPath(name);
+    if (!existsDisk(rel) || readDisk(rel) !== content) {
+      writeDisk(rel, content);
+      written.push(displayPath(rel));
+    }
+  }
+  replaceSnapshot(modules);
+  return { written };
+}

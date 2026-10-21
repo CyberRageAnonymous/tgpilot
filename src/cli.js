@@ -28,7 +28,6 @@ Commands:
   migrate         apply pending schema changes to the database
   webhook         show the bot webhook state (webhook sync to repair)
   logs [-n N]     read this tool's journal
-  profiles        the bots this folder is linked to (--use <name> to switch)
   ping [--probe]  check how this machine reaches the cloud (proxy, DNS, route)
   backup [--label L]  save a copy of the project you can roll back to
   backups         list the saved copies
@@ -68,10 +67,6 @@ export async function main(argv) {
     case 'logout': {
       const { registerAuth } = await import('./commands/auth.js');
       return registerAuth(first, rest);
-    }
-    case 'profiles': {
-      const { registerProfiles } = await import('./commands/auth.js');
-      return registerProfiles(rest);
     }
     case 'status': {
       const { registerStatus } = await import('./commands/status.js');

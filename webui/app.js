@@ -204,8 +204,6 @@ function wire() {
   $('set-backup-push').onchange = (e) => changeSetting('backupBeforePush', e.target.checked);
   $('btn-help-close').onclick = () => show('home');
   renderHelp();
-  $('btn-profile').onclick = () => openProfiles().catch(showError);
-  $('btn-profile-link').onclick = () => linkProfile().catch(showError);
   $('btn-link').onclick = () => $('dialog-link').showModal();
   $('btn-link-save').onclick = () => linkBot().catch(showError);
   $('btn-unlink').onclick = () => unlinkBot().catch(showError);
@@ -382,76 +380,6 @@ async function syncApply() {
   updateHomeSubs();
 }
 
-// --- profiles ----------------------------------------------------------------
-
-// The bots this folder is linked to. Switching is one click; the studio
-// keeps talking to the new bot right away.
-async function openProfiles() {
-  await renderProfiles();
-  $('profile-token').value = '';
-  $('profile-name').value = '';
-  $('dialog-profiles').showModal();
-}
-
-async function renderProfiles() {
-  const box = $('profile-list');
-  const out = await GET('/api/profiles');
-  const profiles = out.profiles || [];
-  if (!profiles.length) {
-    box.innerHTML = `<div class="hint">${t('profiles.none')}</div>`;
-    return;
-  }
-  box.innerHTML = profiles
-    .map((profile) => {
-      const mark = profile.active ? '<span class="badge-active">active</span>' : '';
-      const label = profile.label ? ` — ${escapeHtml(profile.label)}` : '';
-      return `<div class="file-row profile-row${profile.active ? ' active' : ''}">
-        <span class="file-name">${escapeHtml(profile.name)}${label}</span>
-        <span class="file-sub">${escapeHtml(profile.masked || 'no token')} ${mark}</span>
-        ${profile.active ? '' : `<button class="ghost small profile-use" data-name="${escapeHtml(profile.name)}">Use</button>`}
-        <button class="ghost small profile-remove" data-name="${escapeHtml(profile.name)}">×</button>
-      </div>`;
-    })
-    .join('');
-  for (const button of box.querySelectorAll('.profile-use')) {
-    button.onclick = () => useProfile(button.dataset.name).catch(showError);
-  }
-  for (const button of box.querySelectorAll('.profile-remove')) {
-    button.onclick = () => removeProfile(button.dataset.name).catch(showError);
-  }
-}
-
-async function useProfile(name) {
-  const out = await POST('/api/profiles/use', { name });
-  toast(t('profiles.switched', { name }));
-  $('dialog-profiles').close();
-  await Promise.all([refreshProject(), refreshStatus(), loadTree()]).catch(() => {});
-  updateHomeSubs();
-  return out;
-}
-
-async function linkProfile() {
-  const token = $('profile-token').value.trim();
-  if (!token) return;
-  const name = $('profile-name').value.trim() || 'default';
-  const out = await POST('/api/profiles', { token, name });
-  toast(t('profiles.linked', { name }));
-  $('profile-token').value = '';
-  $('profile-name').value = '';
-  await renderProfiles();
-  await Promise.all([refreshProject(), refreshStatus()]).catch(() => {});
-  updateHomeSubs();
-  return out;
-}
-
-async function removeProfile(name) {
-  await DEL('/api/profiles', { name });
-  toast(t('profiles.removed', { name }));
-  await renderProfiles();
-  await Promise.all([refreshProject(), refreshStatus()]).catch(() => {});
-  updateHomeSubs();
-}
-
 // --- the manual --------------------------------------------------------------
 
 // The manual is drawn from the dictionary, so it speaks the language of the
@@ -478,6 +406,29 @@ function renderHelp() {
   }
   $('help-body').innerHTML = parts.join('');
   $('help-title').textContent = sections[0]?.title || t('help.title');
+}
+
+// Without a linked bot the studio explains what to do instead of showing
+// somebody else's files.
+function noBotNotice() {
+  return `<div class="no-bot">
+    <div class="no-bot-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.4 18.6h9.4a3.85 3.85 0 0 0 .5-7.65 5.5 5.5 0 0 0-10.5-1.15 3.9 3.9 0 0 0 .6 8.8z"/><path d="M12 17.2v-6.6M9.5 13.1 12 10.6l2.5 2.5"/></svg></div>
+    <div class="no-bot-title">Link a bot first</div>
+    <div class="no-bot-text">The studio works with a bot in mind: its code, its files and its backups live here. Link one and this folder is yours.</div>
+    <button class="primary small no-bot-link">Link a bot</button>
+  </div>`;
+}
+
+// The editor and the file buttons follow the same rule.
+function applyBotState() {
+  const linked = Boolean(state.token);
+  $('btn-new-module').disabled = !linked;
+  $('btn-new-file').disabled = !linked;
+  if (!linked) {
+    $('editor').disabled = true;
+    $('btn-save').disabled = true;
+    $('btn-delete').disabled = true;
+  }
 }
 
 // --- settings ----------------------------------------------------------------
@@ -509,11 +460,17 @@ function changeSetting(key, value) {
 
 // The texts the code writes into the page, so a language change is complete.
 function refreshStaticText() {
-  $('btn-profile').textContent = state.token ? `bot ${state.token.masked}` : t('app.notLinked');
+  $('bot-token').textContent = state.token ? `bot ${state.token.masked}` : t('app.notLinked');
   $('hero-bot').textContent = state.token ? `bot ${state.token.masked}` : t('home.notLinkedYet');
   updateHomeSubs();
   loadBackups().catch(() => {});
 }
+
+
+// --- settings ----------------------------------------------------------------
+
+// Theme, language and the small comforts. They belong to the person using
+// the studio, so they live in this browser.
 
 // --- backups -----------------------------------------------------------------
 
@@ -670,10 +627,11 @@ async function refreshProject() {
   state.handlerTypes = info.handlerTypes || [];
   const token = info.token;
   state.token = token;
-  $('btn-profile').textContent = token ? `bot ${token.masked}` : 'not linked';
-  $('btn-profile').classList.toggle('linked', Boolean(token));
+  $('bot-token').textContent = token ? `bot ${token.masked}` : t('app.notLinked');
+  $('bot-token').classList.toggle('linked', Boolean(token));
   $('btn-unlink').hidden = !token;
   $('btn-link').hidden = Boolean(token);
+  applyBotState();
   $('hero-bot').textContent = token ? `bot ${token.masked}` : 'not linked yet — press Link in the corner';
 }
 
@@ -687,6 +645,8 @@ async function linkBot() {
   await refreshProject();
   await Promise.all([loadTree(), refreshStatus(), loadLogs()]).catch(showError);
   updateHomeSubs();
+  // The bot's own code came into the folder with the link.
+  if (out.brought) toast(`${out.brought} file(s) of the bot are now in the folder.`);
 }
 
 async function unlinkBot() {
@@ -711,7 +671,7 @@ function countFilesIn(dir) {
 }
 
 function updateHomeSubs() {
-  const linked = $('btn-profile').classList.contains('linked');
+  const linked = $('bot-token').classList.contains('linked');
   const s = state.lastStatus;
 
   let deploy = linked ? 'open for status, deploy and webhook' : 'link a bot first';
@@ -797,6 +757,14 @@ async function createSchema() {
 // --- sections ----------------------------------------------------------------
 
 async function openSection(key) {
+  if (!state.token && key !== 'deploy' && key !== 'help' && key !== 'settings') {
+    // Without a bot there is no folder to work in.
+    show('files');
+    $('folder-crumb').textContent = '';
+    $('folder-list').innerHTML = noBotNotice();
+    $('migrate-actions');
+    return;
+  }
   if (key === 'deploy') {
     show('deploy');
     startSyncWatcher();
