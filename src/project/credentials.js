@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { loadCredentials, saveCredentials, deleteCredentials, ensureStateDir, loadProfiles, saveProfiles, DEFAULT_PROFILE } from './state.js';
+import { loadCredentials, saveCredentials, deleteCredentials, ensureStateDir, loadProfiles, saveProfiles, setCurrentProfile, DEFAULT_PROFILE } from './state.js';
 import { fatal } from '../output.js';
 import { extractAppId, request } from '../api/client.js';
 import { plain } from '../colors.js';
@@ -72,6 +72,8 @@ export function useProfile(name) {
   const { profiles } = loadProfiles();
   if (!profiles[name]) return false;
   saveProfiles({ active: name, profiles });
+  // The state and the snapshot of the bot that is now active.
+  setCurrentProfile(name);
   return true;
 }
 
@@ -81,6 +83,7 @@ export function saveProfileToken(name, token, label = '') {
   const key = name || DEFAULT_PROFILE;
   profiles[key] = { token, label: label || profiles[key]?.label || '' };
   saveProfiles({ active: key, profiles });
+  setCurrentProfile(key);
   return key;
 }
 
@@ -90,6 +93,7 @@ export function removeProfile(name) {
   delete profiles[name];
   const nextActive = active === name ? Object.keys(profiles)[0] || null : active;
   saveProfiles({ active: nextActive, profiles });
+  setCurrentProfile(nextActive);
   return true;
 }
 

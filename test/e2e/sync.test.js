@@ -89,3 +89,28 @@ test('the sync takes a backup that can be restored', async () => {
     child.kill('SIGTERM');
   }
 });
+
+test('the studio can tell that the bot moved on', async () => {
+  const port = await freePort();
+  const proj = new Project(cloud, token, 'sync-banner');
+  proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  const child = await startStudio(proj, port);
+  try {
+    // The studio knows the bot at revision 0.
+    const status = await api(port, '/api/status');
+    assert.equal(status.status, 200, status.text);
+
+    // Somebody changes the bot elsewhere.
+    const bot = [...cloud.bots.values()][0];
+    bot.modules.set('handlers/callback_query', 'export default async function (cb, ctx) { return 3; }\n');
+    bot.revision += 1;
+
+    // The preview reports the new revision and the new file.
+    const preview = await api(port, '/api/sync/preview', { method: 'POST', body: {} });
+    assert.equal(preview.status, 200, preview.text);
+    assert.equal(preview.json.revision, bot.revision);
+    assert.ok(preview.json.preview.added.includes('tgcloud/handlers/callback_query.js'), preview.text);
+  } finally {
+    child.kill('SIGTERM');
+  }
+});

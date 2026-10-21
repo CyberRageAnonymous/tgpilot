@@ -311,6 +311,19 @@ html, body {
   transition: background .14s ease, color .14s ease;
 }
 .link-row:hover { background: rgba(255, 255, 255, .04); color: var(--text); }
+.link-logo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--line);
+  transition: color .14s ease, background .14s ease, transform .14s ease;
+}
+.link-row:hover .link-logo { color: var(--accent); background: var(--accent-soft); transform: scale(1.06); }
 .link-row .k { color: var(--text); font-weight: 550; }
 .link-row .v { font-family: var(--mono); font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -340,7 +353,9 @@ html, body {
 
 .backup-row, .profile-row { cursor: default; }
 .backup-row:hover, .profile-row:hover { transform: none; }
-.backup-restore, .profile-use, .profile-remove { flex: none; }
+.backup-restore, .profile-use, .profile-remove, .backup-remove { flex: none; }
+.backup-remove { color: var(--dim); }
+.backup-remove:hover { color: var(--bad); border-color: rgba(255, 122, 99, .35); }
 .profile-remove { color: var(--dim); }
 .profile-remove:hover { color: var(--bad); border-color: rgba(255, 122, 99, .35); }
 .profile-row.active { background: var(--accent-soft); border-color: rgba(110, 168, 255, .22); }
@@ -684,3 +699,20 @@ html[data-theme="light"] {
 @media (prefers-color-scheme: light) {
   .help-tree, .help-code { background: rgba(15, 23, 42, .04); }
 }
+
+/* --- the banner that says: the bot has something new ------------------------ */
+
+.sync-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(110, 168, 255, .3);
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-sm);
+  animation: fadeUp .28s cubic-bezier(.2, .7, .3, 1) both;
+}
+.sync-banner[hidden] { display: none; }
+.sync-banner-text { flex: 1; min-width: 180px; font-size: 13px; color: var(--text); }

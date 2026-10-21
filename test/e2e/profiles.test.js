@@ -93,6 +93,35 @@ test('the studio can link, switch and remove a bot', async () => {
   }
 });
 
+test('each bot keeps its own deployed files', async () => {
+  // Two bots, two different sets of files: switching has to show the right
+  // ones, not the ones of the bot that was active before.
+  const proj = new Project(cloud, null, 'per-profile');
+  proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+
+  await proj.cli(['login', tokenA, '--profile', 'staging']);
+  await proj.cli(['login', tokenB, '--profile', 'production']);
+
+  // Give the two bots different code.
+  const bots = cloud.bots;
+  const list = [...bots.values()];
+  list[0].modules.set('handlers/only_staging', 'export default async function (a, ctx) { return "staging"; }\n');
+  list[0].revision += 1;
+  list[1].modules.set('handlers/only_production', 'export default async function (a, ctx) { return "production"; }\n');
+  list[1].revision += 1;
+
+  await proj.cli(['profiles', '--use', 'staging']);
+  const staging = await proj.cli(['pull']);
+  assert.equal(staging.code, 0, staging.out);
+  assert.ok(proj.exists('tgcloud/handlers/only_staging.js'), 'the staging bot brought its file');
+  assert.equal(proj.exists('tgcloud/handlers/only_production.js'), false, 'not the other bot\'s file');
+
+  await proj.cli(['profiles', '--use', 'production']);
+  const production = await proj.cli(['pull']);
+  assert.equal(production.code, 0, production.out);
+  assert.ok(proj.exists('tgcloud/handlers/only_production.js'), 'the production bot brought its file');
+});
+
 test('the old single token still works', async () => {
   // A project that was linked before the profiles existed keeps working.
   const proj = new Project(cloud, null, 'legacy');

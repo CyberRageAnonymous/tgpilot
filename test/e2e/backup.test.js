@@ -102,3 +102,27 @@ test('backups stay out of the deployed code', async () => {
   assert.ok(manifest.files >= 1);
   assert.ok(!manifest.files || !manifest.files.toString().includes('.tgpilot'));
 });
+
+test('a backup can be removed again', async () => {
+  const port = await freePort();
+  const proj = new Project(cloud, token, 'backup-delete');
+  proj.write('tgcloud/handlers/message.js', 'export default async function (message, ctx) { return 1; }\n');
+  const child = await startStudio(proj, port);
+  try {
+    const created = await api(port, '/api/backups', { method: 'POST', body: { label: 'temporary' } });
+    assert.equal(created.status, 200, created.text);
+    const id = created.json.backup.id;
+    assert.equal(created.json.backups.length, 1);
+
+    const removed = await api(port, '/api/backups', { method: 'DELETE', body: { id } });
+    assert.equal(removed.status, 200, removed.text);
+    assert.equal(removed.json.removed, true);
+    assert.deepEqual(removed.json.backups, []);
+
+    const missing = await api(port, '/api/backups', { method: 'DELETE', body: { id } });
+    assert.equal(missing.status, 200);
+    assert.equal(missing.json.removed, false);
+  } finally {
+    child.kill('SIGTERM');
+  }
+});

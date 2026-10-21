@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { profileStateDir, currentProfile } from './state.js';
 import { createHash } from 'crypto';
 import { toPosix } from './snapshot.js';
 import { sameConfig, normalizeConfig } from './config.js';
@@ -8,7 +9,10 @@ import { sameConfig, normalizeConfig } from './config.js';
 // `{ path: { hash, size } }` plus the serving config; the local snapshot keeps
 // the last `static` block the server returned, hashes included.
 
-const SNAPSHOT_FILE = path.join('.tgpilot', 'static.json');
+// The Mini App build the cloud holds — per bot, like the rest of the state.
+function snapshotFile() {
+  return path.join(profileStateDir(currentProfile()), 'static.json');
+}
 
 export function hashStaticFile(absPath) {
   return createHash('md5').update(fs.readFileSync(absPath)).digest('hex');
@@ -43,9 +47,9 @@ export function scanStatic(source) {
 }
 
 export function loadStaticSnapshot() {
-  if (!fs.existsSync(SNAPSHOT_FILE)) return null;
+  if (!fs.existsSync(snapshotFile())) return null;
   try {
-    const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf-8'));
+    const parsed = JSON.parse(fs.readFileSync(snapshotFile(), 'utf-8'));
     return parsed && typeof parsed === 'object' && parsed.hash ? parsed : null;
   } catch {
     return null;
@@ -54,11 +58,11 @@ export function loadStaticSnapshot() {
 
 export function saveStaticSnapshot(block) {
   if (!block) {
-    fs.rmSync(SNAPSHOT_FILE, { force: true });
+    fs.rmSync(snapshotFile(), { force: true });
     return;
   }
-  fs.mkdirSync(path.dirname(SNAPSHOT_FILE), { recursive: true });
-  fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify(block, null, 2) + '\n');
+  fs.mkdirSync(path.dirname(snapshotFile()), { recursive: true });
+  fs.writeFileSync(snapshotFile(), JSON.stringify(block, null, 2) + '\n');
 }
 
 export function staticDiff(local, config, snapshot) {

@@ -6,9 +6,66 @@ import path from 'path';
 // every scaffolded file. Readers treat missing or broken files as blank state.
 
 export const STATE_DIR = '.tgpilot';
-const STATE_FILE = path.join(STATE_DIR, 'state.json');
-const CAPABILITIES_FILE = path.join(STATE_DIR, 'capabilities.json');
+const PROFILES_DIR = path.join(STATE_DIR, 'profiles');
+const LEGACY_STATE_FILE = path.join(STATE_DIR, 'state.json');
+const LEGACY_CAPABILITIES_FILE = path.join(STATE_DIR, 'capabilities.json');
 const CREDENTIALS_FILE = path.join(STATE_DIR, 'credentials');
+
+// Every bot in a folder has its own state: the revision it is at, the
+// snapshot of its code, the migrations it carries. Switching bots therefore
+// shows that bot's world, not the previous one's.
+export function profileStateDir(profile) {
+  const name = String(profile || 'default').replace(/[^\w.-]+/g, '_') || 'default';
+  return path.join(PROFILES_DIR, name);
+}
+
+let activeProfileName = null;
+
+// The profile whose state is in use right now.
+export function currentProfile() {
+  if (activeProfileName) return activeProfileName;
+  const profiles = loadProfiles();
+  activeProfileName = profiles.active || 'default';
+  return activeProfileName;
+}
+
+// Called when the studio or the CLI switches bots.
+export function setCurrentProfile(name) {
+  activeProfileName = name || 'default';
+  return activeProfileName;
+}
+
+function stateFile() {
+  return path.join(profileStateDir(currentProfile()), 'state.json');
+}
+
+function capabilitiesFile() {
+  return path.join(profileStateDir(currentProfile()), 'capabilities.json');
+}
+
+// A project that was linked before profiles existed keeps its state: it
+// belongs to the default bot.
+function migrateLegacyState() {
+  const dir = profileStateDir('default');
+  try {
+    if (fs.existsSync(LEGACY_STATE_FILE) && !fs.existsSync(path.join(dir, 'state.json'))) {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.renameSync(LEGACY_STATE_FILE, path.join(dir, 'state.json'));
+    }
+    if (fs.existsSync(LEGACY_CAPABILITIES_FILE) && !fs.existsSync(path.join(dir, 'capabilities.json'))) {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.renameSync(LEGACY_CAPABILITIES_FILE, path.join(dir, 'capabilities.json'));
+    }
+    const legacySnapshot = path.join(STATE_DIR, 'snapshot');
+    const targetSnapshot = path.join(dir, 'snapshot');
+    if (fs.existsSync(legacySnapshot) && !fs.existsSync(targetSnapshot)) {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.renameSync(legacySnapshot, targetSnapshot);
+    }
+  } catch {
+    /* a folder that cannot be reorganised still works, it just starts fresh */
+  }
+}
 
 export function ensureStateDir() {
   if (!fs.existsSync(STATE_DIR)) {
@@ -24,9 +81,11 @@ function emptyState() {
 }
 
 export function loadState() {
-  if (!fs.existsSync(STATE_FILE)) return emptyState();
+  migrateLegacyState();
+  const file = stateFile();
+  if (!fs.existsSync(file)) return emptyState();
   try {
-    const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
     return { ...emptyState(), ...parsed };
   } catch {
     return emptyState();
@@ -52,7 +111,10 @@ function atomicWrite(file, content) {
 }
 
 export function saveState(state) {
-  atomicWrite(STATE_FILE, JSON.stringify(state, null, 2) + '\n');
+  migrateLegacyState();
+  const file = stateFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  atomicWrite(file, JSON.stringify(state, null, 2) + '\n');
 }
 
 export function saveInitTemplateHash(file, digest) {
@@ -62,16 +124,21 @@ export function saveInitTemplateHash(file, digest) {
 }
 
 export function loadCachedCapabilities() {
-  if (!fs.existsSync(CAPABILITIES_FILE)) return null;
+  migrateLegacyState();
+  const file = capabilitiesFile();
+  if (!fs.existsSync(file)) return null;
   try {
-    return JSON.parse(fs.readFileSync(CAPABILITIES_FILE, 'utf-8'));
+    return JSON.parse(fs.readFileSync(file, 'utf-8'));
   } catch {
     return null;
   }
 }
 
 export function saveCachedCapabilities(descriptor) {
-  atomicWrite(CAPABILITIES_FILE, JSON.stringify(descriptor, null, 2) + '\n');
+  migrateLegacyState();
+  const file = capabilitiesFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  atomicWrite(file, JSON.stringify(descriptor, null, 2) + '\n');
 }
 
 export function loadCredentials() {

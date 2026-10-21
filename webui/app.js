@@ -140,6 +140,7 @@ const SECTIONS = {
 };
 
 function show(view, section) {
+  if (state.view === 'deploy' && view !== 'deploy') stopSyncWatcher();
   state.view = view;
   state.section = section || null;
   for (const el of document.querySelectorAll('.view')) {
@@ -235,6 +236,8 @@ function wire() {
   $('btn-fetch').onclick = () => doFetch().catch(showError);
   $('btn-sync').onclick = () => syncPreview().catch(showError);
   $('btn-sync-apply').onclick = () => syncApply().catch(showError);
+  $('btn-sync-now').onclick = () => syncApply().catch(showError);
+  $('btn-sync-later').onclick = () => hideSyncBanner();
   $('btn-status').onclick = () => refreshStatus().catch(showError);
 
   $('btn-migrate-check').onclick = () => migrateCheck().catch(showError);
@@ -301,6 +304,50 @@ async function start() {
 
 // --- sync --------------------------------------------------------------------
 
+// While the deploy view is open, the studio keeps an eye on the bot. When
+// something changed there — from a phone, from another machine — a banner
+// asks whether to bring it in.
+let syncWatcher = null;
+
+function startSyncWatcher() {
+  stopSyncWatcher();
+  const tick = async () => {
+    try {
+      const out = await POST('/api/sync/preview', {});
+      const remote = out.revision;
+      const known = state.lastStatus?.revision;
+      // The bot moved on since we last looked at it.
+      if (remote != null && known != null && remote !== known) {
+        showSyncBanner(out.preview || {});
+      }
+    } catch {
+      /* the cloud is not reachable right now; the banner stays as it was */
+    }
+  };
+  tick();
+  syncWatcher = setInterval(tick, 30000);
+}
+
+function stopSyncWatcher() {
+  if (syncWatcher) clearInterval(syncWatcher);
+  syncWatcher = null;
+  hideSyncBanner();
+}
+
+function showSyncBanner(preview) {
+  const bits = [];
+  if (preview.added?.length) bits.push(`${preview.added.length} new`);
+  if (preview.updated?.length) bits.push(`${preview.updated.length} changed`);
+  if (preview.removed?.length) bits.push(`${preview.removed.length} removed`);
+  $('sync-banner-text').textContent = `The bot has changes: ${bits.join(', ')}.`;
+  $('sync-banner').hidden = false;
+}
+
+function hideSyncBanner() {
+  const banner = $('sync-banner');
+  if (banner) banner.hidden = true;
+}
+
 // The bot may have been changed somewhere else — a phone, another machine.
 // This shows what would come into the folder before anything is written.
 async function syncPreview() {
@@ -324,6 +371,7 @@ async function syncPreview() {
 
 async function syncApply() {
   $('dialog-sync').close();
+  hideSyncBanner();
   const out = await POST('/api/sync/apply', {});
   const bits = [];
   if (out.written?.length) bits.push(`${out.written.length} file(s) written`);
@@ -494,9 +542,13 @@ async function loadBackups() {
         <span class="file-name">${escapeHtml(backup.id)}${label ? ` — ${label}` : ''}</span>
         <span class="file-sub">${escapeHtml(when)} · ${backup.files} files</span>
         <button class="ghost small backup-restore" data-id="${escapeHtml(backup.id)}">Restore</button>
+        <button class="ghost small backup-remove" data-id="${escapeHtml(backup.id)}" title="Remove this backup">×</button>
       </div>`;
     })
     .join('');
+  for (const button of box.querySelectorAll('.backup-remove')) {
+    button.onclick = () => removeBackup(button.dataset.id).catch(showError);
+  }
   for (const button of box.querySelectorAll('.backup-restore')) {
     button.onclick = () => {
       $('backup-restore-text').textContent = t('backup.restoreText', { id: button.dataset.id });
@@ -511,6 +563,13 @@ async function createBackup() {
   if (label === null) return;
   const out = await POST('/api/backups', { label });
   toast(t('backup.saved', { id: out.backup.id }));
+  await loadBackups();
+}
+
+async function removeBackup(id) {
+  if (!confirm(`Remove the backup ${id}? The files in it are gone for good.`)) return;
+  await DEL('/api/backups', { id });
+  toast(`Backup ${id} removed.`);
   await loadBackups();
 }
 
@@ -740,6 +799,7 @@ async function createSchema() {
 async function openSection(key) {
   if (key === 'deploy') {
     show('deploy');
+    startSyncWatcher();
     await Promise.all([refreshStatus().catch(showError), loadWebhook().catch(() => {}), loadLogs().catch(() => {})]);
     return;
   }

@@ -35,7 +35,7 @@ test('init scaffolds from the server templates', async () => {
   assert.ok(proj.exists('tgcloud/lib'));
   assert.ok(proj.exists('tgcloud.jsonc'));
   assert.match(proj.read('.gitignore'), /\.tgpilot\//);
-  assert.ok(proj.exists('.tgpilot/state.json'));
+  assert.ok(proj.exists(proj.statePath()));
   const state = proj.state();
   assert.ok(state.init_templates['tgcloud/schema.js']);
   assert.ok(state.init_templates['tgcloud/handlers/message.js']);
@@ -54,9 +54,9 @@ test('first push deploys everything and writes the snapshot', async () => {
   assert.match(r.out, /Deploying \d+ changes…/);
   assert.match(r.out, /Done in /);
   assert.equal(botOf().modules.get('handlers/message'), HANDLER);
-  assert.ok(proj.exists('.tgpilot/snapshot/handlers/message.js'));
-  assert.ok(proj.exists('.tgpilot/snapshot/schema.js'));
-  assert.equal(proj.read('.tgpilot/snapshot/handlers/message.js'), HANDLER);
+  assert.ok(proj.exists(path.join(proj.snapshotPath(), 'handlers/message.js')));
+  assert.ok(proj.exists(path.join(proj.snapshotPath(), 'schema.js')));
+  assert.equal(proj.read(path.join(proj.snapshotPath(), 'handlers/message.js')), HANDLER);
   assert.equal(proj.state().last_known_revision, 1);
 });
 
@@ -146,7 +146,7 @@ test('diff shows a patch for local edits', async () => {
 test('wrong revision surfaces mismatch guidance, force fixes it', async () => {
   const state = proj.state();
   state.last_known_revision = 999;
-  proj.write('.tgpilot/state.json', JSON.stringify(state, null, 2));
+  proj.write(proj.statePath(), JSON.stringify(state, null, 2));
   proj.write('tgcloud/handlers/message.js', HANDLER + '// tweak again\n');
   const bad = await proj.cli(['push']);
   assert.equal(bad.code, 1, bad.out);

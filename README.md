@@ -135,6 +135,9 @@ the project. The first visit picks the language the browser asks for.
 
 ## Sync: what the bot knows comes back
 
+While the *Deploy & status* view is open, the studio keeps an eye on the bot
+and says so when it moved on — a banner offers to bring the changes in.
+
 A bot can be changed from a phone or from another machine. **Sync from the
 bot** in the studio asks the cloud what it holds and brings it into the
 folder — new files included. Files the cloud never knew (your own helpers and
@@ -143,6 +146,9 @@ notes) are never touched, and a backup is taken before anything is written.
 ```bash
 tgpilot pull       # the same thing in the terminal
 ```
+
+Every bot in a folder keeps its own snapshot and state, so switching between
+them shows the right world.
 
 ## The web studio
 
