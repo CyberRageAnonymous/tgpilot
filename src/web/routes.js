@@ -16,6 +16,7 @@ import { changeCard, changeId } from '../project/changes.js';
 import { serverErrorText, requestPublic, invalidateNetworkCache } from '../api/client.js';
 import { networkConfig, saveNetworkConfig, diagnose } from '../project/network.js';
 import { createBackup, listBackups, restoreBackup, removeBackup } from '../project/backup.js';
+import { previewSync, applySync } from '../project/sync.js';
 import { log, readLogs, clearLogs, LEVELS } from '../logs.js';
 import { moduleStarter, UPDATE_TYPES, SCHEMA_STARTER } from '../templates.js';
 import { parse } from '../json5.js';
@@ -42,7 +43,7 @@ export function createRoutes(root, uiDir) {
     ['GET /api/status', () => handleStatus()],
     ['POST /api/bot', (body) => handleBotLink(body)],
     ['DELETE /api/bot', () => handleBotUnlink()],
-    ['POST /api/push', (body) => handlePush(body)],
+    ['POST /api/push', (body) => handlePush(project, body)],
     ['POST /api/fetch', () => handleFetch()],
     ['POST /api/run', (body) => handleRun(body)],
     ['GET /api/migrate', () => handleMigrateCheck()],
@@ -53,6 +54,8 @@ export function createRoutes(root, uiDir) {
     ['GET /api/logs', (body, query) => handleLogsGet(query)],
     ['DELETE /api/logs', () => handleLogsClear()],
     ['GET /api/profiles', () => handleProfilesGet()],
+    ['POST /api/sync/preview', () => handleSyncPreview()],
+    ['POST /api/sync/apply', (body) => handleSyncApply(body)],
     ['POST /api/profiles/use', (body) => handleProfileUse(body)],
     ['POST /api/profiles', (body) => handleProfileLink(body)],
     ['DELETE /api/profiles', (body) => handleProfileDelete(body)],
@@ -73,6 +76,9 @@ export function createRoutes(root, uiDir) {
       if (key === 'GET /' || key === 'GET /index.html') return sendFile(res, ui, 'html');
       if (key === 'GET /style.css') return sendFile(res, ui, 'css');
       if (key === 'GET /app.js') return sendFile(res, ui, 'js');
+      if (key === 'GET /i18n.js') return sendFile(res, ui, 'i18n');
+      if (key === 'GET /settings.js') return sendFile(res, ui, 'settings');
+      if (key === 'GET /help.js') return sendFile(res, ui, 'help');
     }
 
     const handler = routes.get(key);
@@ -174,6 +180,9 @@ const cssJs = {
   html: 'text/html; charset=utf-8',
   css: 'text/css; charset=utf-8',
   js: 'text/javascript; charset=utf-8',
+  i18n: 'text/javascript; charset=utf-8',
+  settings: 'text/javascript; charset=utf-8',
+  help: 'text/javascript; charset=utf-8',
 };
 
 function loadUi(uiDir) {
@@ -189,6 +198,9 @@ function loadUi(uiDir) {
     html: read('index.html', '<h1>tgpilot</h1><p>studio files are missing.</p>'),
     css: read('style.css', ''),
     js: read('app.js', 'console.warn("studio app missing");'),
+    i18n: read('i18n.js', 'export const LANGUAGES = []; export const DICTIONARIES = {};'),
+    settings: read('settings.js', 'console.warn("studio settings missing");'),
+    help: read('help.js', 'export const HELP = { en: [] };'),
   };
 }
 
@@ -392,8 +404,15 @@ function handleBotUnlink() {
 }
 
 // POST /api/push: preview first, then {confirm: true} to actually deploy.
-async function handlePush(body) {
+async function handlePush(project, body) {
   await syncCapabilities();
+
+  // A push can be told to take a backup first — the studio offers that as
+  // a setting, so a bad deploy is always one click away from being undone.
+  if (body?.backup === true) {
+    const manifest = createBackup(project.root, { label: 'before push' });
+    log('info', 'backup', 'Backup taken before the push.', { id: manifest.id });
+  }
 
   const plan = planPush({ targets: body?.targets || [], force: body?.force === true });
   const token = requiredToken();
@@ -561,6 +580,37 @@ function handleSchemaDiff() {
   if (remote == null && local == null) return { ok: true, hasSchema: false, touched: false, diff: null };
   const diff = computeDiff(remote ?? '', local ?? '', displayPath(SCHEMA_FILE));
   return { ok: true, hasSchema: true, touched: diff !== '', diff };
+}
+
+// Sync: what the cloud holds is the truth — the folder follows it, new
+// files included. Local files the cloud never knew are left alone.
+async function handleSyncPreview() {
+  const token = requiredToken();
+  const response = await getFiles(token);
+  const preview = previewSync(response.canonical_modules || {});
+  if ('static' in response) saveStaticSnapshot(response.static);
+  return { ok: true, preview, revision: response.revision ?? null };
+}
+
+async function handleSyncApply(body) {
+  const token = requiredToken();
+  const response = await getFiles(token);
+  const preview = previewSync(response.canonical_modules || {});
+  const result = applySync(response.canonical_modules || {}, {
+    backup: body?.backup !== false,
+    removeMissing: body?.removeMissing !== false,
+  });
+  if (response.revision != null) {
+    const state = loadState();
+    state.last_known_revision = response.revision;
+    saveState(state);
+  }
+  if ('static' in response) saveStaticSnapshot(response.static);
+  log('info', 'sync', 'Folder synced with the bot.', {
+    written: result.written.length,
+    deleted: result.deleted.length,
+  });
+  return { ok: true, preview, written: result.written, deleted: result.deleted, safety: result.safety };
 }
 
 // Profiles: the bots this folder is linked to. One folder can hold several

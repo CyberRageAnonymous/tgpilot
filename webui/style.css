@@ -555,29 +555,52 @@ dialog.dialog::backdrop { background: rgba(4, 6, 10, .68); backdrop-filter: blur
 
 /* --- light theme ------------------------------------------------------------ */
 
+/* The light palette, used when it is chosen or when the system asks for it. */
+html[data-theme="light"] {
+  --bg: #f4f6fb;
+  --bg-2: #eef1f7;
+  --panel: rgba(255, 255, 255, .82);
+  --panel-solid: #ffffff;
+  --panel-2: #eef1f7;
+  --panel-3: #e4e9f2;
+  --line: rgba(15, 23, 42, .09);
+  --line-strong: rgba(15, 23, 42, .14);
+  --text: #131926;
+  --text-dim: #4a5568;
+  --dim: #6b7688;
+  --accent: #2f6fe4;
+  --accent-soft: rgba(47, 111, 228, .1);
+  --accent-2: #16925a;
+  --accent-2-soft: rgba(22, 146, 90, .1);
+  --warn: #b3770d;
+  --warn-soft: rgba(179, 119, 13, .1);
+  --bad: #d13c2a;
+  --bad-soft: rgba(209, 60, 42, .1);
+}
+
 @media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f4f6fb;
-    --bg-2: #eef1f7;
-    --panel: rgba(255, 255, 255, .82);
-    --panel-solid: #ffffff;
-    --panel-2: #eef1f7;
-    --panel-3: #e4e9f2;
-    --line: rgba(15, 23, 42, .09);
-    --line-strong: rgba(15, 23, 42, .14);
-    --text: #131926;
-    --text-dim: #4a5568;
-    --dim: #6b7688;
-    --accent: #2f6fe4;
-    --accent-soft: rgba(47, 111, 228, .1);
-    --accent-2: #16925a;
-    --accent-2-soft: rgba(22, 146, 90, .1);
-    --warn: #b3770d;
-    --warn-soft: rgba(179, 119, 13, .1);
-    --bad: #d13c2a;
-    --bad-soft: rgba(209, 60, 42, .1);
+  html:not([data-theme="dark"]) {
+  --bg: #f4f6fb;
+  --bg-2: #eef1f7;
+  --panel: rgba(255, 255, 255, .82);
+  --panel-solid: #ffffff;
+  --panel-2: #eef1f7;
+  --panel-3: #e4e9f2;
+  --line: rgba(15, 23, 42, .09);
+  --line-strong: rgba(15, 23, 42, .14);
+  --text: #131926;
+  --text-dim: #4a5568;
+  --dim: #6b7688;
+  --accent: #2f6fe4;
+  --accent-soft: rgba(47, 111, 228, .1);
+  --accent-2: #16925a;
+  --accent-2-soft: rgba(22, 146, 90, .1);
+  --warn: #b3770d;
+  --warn-soft: rgba(179, 119, 13, .1);
+  --bad: #d13c2a;
+  --bad-soft: rgba(209, 60, 42, .1);
   }
-  html, body {
+  html:not([data-theme="dark"]) body {
     background:
       radial-gradient(900px 380px at 50% -160px, rgba(47, 111, 228, .12), transparent 65%),
       linear-gradient(180deg, var(--bg-2), var(--bg) 40%);
@@ -592,8 +615,52 @@ dialog.dialog::backdrop { background: rgba(4, 6, 10, .68); backdrop-filter: blur
   .toast { background: #fff; }
 }
 
+/* --- migration cards --------------------------------------------------------- */
+
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 0 0 8px;
+  background: var(--panel-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: pointer;
+  transition: border-color .14s ease, background .14s ease, transform .1s ease;
+}
+.card:hover { border-color: var(--line-strong); background: var(--panel-3); }
+.card:active { transform: scale(.995); }
+.card.negative { border-color: rgba(255, 122, 99, .3); background: var(--bad-soft); }
+.card.warn { border-color: rgba(240, 188, 90, .28); background: var(--warn-soft); }
+.card input[type="checkbox"] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.card input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .5; }
+.card span { flex: 1; min-width: 0; }
+.card.picked { border-color: rgba(110, 168, 255, .4); background: var(--accent-soft); }
+
 /* --- the manual ------------------------------------------------------------- */
 
+.help-section + .help-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.help-heading {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  letter-spacing: .1px;
+}
+.help-section p { margin: 0 0 8px; }
 .help-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 9px; }
 .help-steps strong { color: var(--text); }
 .help-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }

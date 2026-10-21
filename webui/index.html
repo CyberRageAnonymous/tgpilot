@@ -8,13 +8,14 @@
 </head>
 <body>
 <header class="topbar">
-  <button id="btn-back" class="ghost back" hidden>← Back</button>
-  <div class="top-title" id="top-title">tgpilot studio</div>
+  <button id="btn-back" class="ghost back" hidden data-i18n="app.back">← Back</button>
+  <div class="top-title" id="top-title" data-i18n="app.title">tgpilot studio</div>
   <div class="bot-state">
-    <button id="btn-help" class="ghost small" title="The manual">Help</button>
-    <button id="btn-profile" class="token-chip" title="Switch the bot this folder talks to">not linked</button>
-    <button id="btn-link" class="ghost small">Link</button>
-    <button id="btn-unlink" class="ghost small" hidden>Unlink</button>
+    <button id="btn-settings" class="ghost small" data-i18n="app.settings">Settings</button>
+    <button id="btn-help" class="ghost small" data-i18n="app.help">Help</button>
+    <button id="btn-profile" class="token-chip" data-i18n="app.notLinked">not linked</button>
+    <button id="btn-link" class="ghost small" data-i18n="app.link">Link</button>
+    <button id="btn-unlink" class="ghost small" hidden data-i18n="app.unlink">Unlink</button>
   </div>
 </header>
 
@@ -28,18 +29,17 @@
           <path d="M14 30h22a9 9 0 0 0 2.4-17.7A14 14 0 0 0 10 9.3 10 10 0 0 0 14 30z"/>
         </svg>
       </div>
-      <h1>Serverless <span class="beta">beta</span></h1>
-      <p class="hero-sub">Run your bot logic in the cloud without hosting a server.
-      Handle updates with JavaScript functions, share code via libraries</p>
-      <div class="hero-bot" id="hero-bot">not linked yet — press Link in the corner</div>
+      <h1><span data-i18n="home.title">Serverless</span> <span class="beta" data-i18n="home.beta">beta</span></h1>
+      <p class="hero-sub" data-i18n="home.sub">Run your bot logic in the cloud without hosting a server.</p>
+      <div class="hero-bot" id="hero-bot" data-i18n="home.notLinkedYet">not linked yet</div>
     </div>
 
     <div class="section-list">
       <button class="section-row" data-open="deploy">
         <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="13" rx="2.5"/><path d="M7 9.5l-2.6 2 2.6 2M12.6 9.5l2.6 2-2.6 2M10.4 15l2.6-5"/></svg></span>
         <span class="section-text">
-          <span class="section-title">Deploy &amp; status</span>
-          <span class="section-sub" id="sub-deploy">link a bot first</span>
+          <span class="section-title" data-i18n="section.deploy">Deploy &amp; status</span>
+          <span class="section-sub" id="sub-deploy" data-i18n="section.deploySub">link a bot first</span>
         </span>
         <span class="count" id="cnt-deploy"></span>
         <span class="chev">›</span>
@@ -48,8 +48,8 @@
       <button class="section-row" data-open="handlers">
         <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 6 13h5l-1.5 9L18 10h-5l1.6-8z"/></svg></span>
         <span class="section-text">
-          <span class="section-title">Handlers</span>
-          <span class="section-sub" id="sub-handlers">functions that react to Telegram update types</span>
+          <span class="section-title" data-i18n="section.handlers">Handlers</span>
+          <span class="section-sub" id="sub-handlers" data-i18n="section.handlersSub">functions</span>
         </span>
         <span class="count" id="cnt-handlers"></span>
         <span class="chev">›</span>
@@ -58,8 +58,8 @@
       <button class="section-row" data-open="endpoints">
         <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/><path d="M6.7 12h3.6M13.7 12h3.6"/></svg></span>
         <span class="section-text">
-          <span class="section-title">Endpoints</span>
-          <span class="section-sub" id="sub-endpoints">functions your Mini App can call</span>
+          <span class="section-title" data-i18n="section.endpoints">Endpoints</span>
+          <span class="section-sub" id="sub-endpoints" data-i18n="section.endpointsSub">functions</span>
         </span>
         <span class="count" id="cnt-endpoints"></span>
         <span class="chev">›</span>
@@ -68,8 +68,8 @@
       <button class="section-row" data-open="library">
         <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5c-2 0-2.4 1.4-2.4 2.6v2.2C6.6 11.2 5.7 12 4.4 12c1.3 0 2.2.8 2.2 2.2v2.2C6.6 17.6 7 19 9 19M15 5c2 0 2.4 1.4 2.4 2.6v2.2c0 1.4.9 2.2 2.2 2.2-1.3 0-2.2.8-2.2 2.2v2.2C17.4 17.6 17 19 15 19"/></svg></span>
         <span class="section-text">
-          <span class="section-title">Library</span>
-          <span class="section-sub" id="sub-library">shared modules imported by your code</span>
+          <span class="section-title" data-i18n="section.library">Library</span>
+          <span class="section-sub" id="sub-library" data-i18n="section.librarySub">shared modules</span>
         </span>
         <span class="count" id="cnt-library"></span>
         <span class="chev">›</span>
@@ -78,8 +78,8 @@
       <button class="section-row" data-open="database">
         <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg></span>
         <span class="section-text">
-          <span class="section-title">Database</span>
-          <span class="section-sub" id="sub-database">define your tables and columns in code</span>
+          <span class="section-title" data-i18n="section.database">Database</span>
+          <span class="section-sub" id="sub-database" data-i18n="section.databaseSub">tables</span>
         </span>
         <span class="count" id="cnt-database"></span>
         <span class="chev">›</span>
@@ -88,8 +88,8 @@
       <button class="section-row" data-open="miniapp">
         <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2.5h9v8.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/><path d="M13.2 12.6l-2 2 2 2M17 12.6l-2 2 2 2"/></svg></span>
         <span class="section-text">
-          <span class="section-title">Mini App Files</span>
-          <span class="section-sub" id="sub-miniapp">the front-end your users open in Telegram</span>
+          <span class="section-title" data-i18n="section.miniapp">Mini App Files</span>
+          <span class="section-sub" id="sub-miniapp" data-i18n="section.miniappSub">front-end</span>
         </span>
         <span class="count" id="cnt-miniapp"></span>
         <span class="chev">›</span>
@@ -98,8 +98,8 @@
       <button class="section-row" data-open="other">
         <span class="section-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4.5 4.5v12a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M14 3.5V8h4.5"/></svg></span>
         <span class="section-text">
-          <span class="section-title">Other files</span>
-          <span class="section-sub" id="sub-other">README, config and anything else in the folder</span>
+          <span class="section-title" data-i18n="section.other">Other files</span>
+          <span class="section-sub" id="sub-other" data-i18n="section.otherSub">other files</span>
         </span>
         <span class="count" id="cnt-other"></span>
         <span class="chev">›</span>
@@ -107,18 +107,15 @@
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Backups</h2>
-        <button id="btn-backup-new" class="ghost small">Save a backup</button>
+      <div class="panel-head"><h2 data-i18n="home.backups">Backups</h2>
+        <button id="btn-backup-new" class="ghost small" data-i18n="backup.save">Save a backup</button>
       </div>
-      <p class="about-text">
-        A copy of the project as it works right now. Save one before a big
-        change — if the bot breaks, one click puts it back.
-      </p>
+      <p class="about-text" data-i18n="home.backupsText">A copy of the project as it works right now.</p>
       <div id="backup-list" class="file-list"></div>
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Network</h2>
+      <div class="panel-head"><h2 data-i18n="home.network">Network</h2>
         <button id="btn-network" class="ghost small">Settings</button>
       </div>
       <p class="about-text" id="network-summary">
@@ -127,13 +124,8 @@
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>About</h2></div>
-      <p class="about-text">
-        <strong>tgpilot</strong> is a free, open-source tool for Telegram Serverless bots:
-        write the code in a plain folder and deploy, run, migrate and keep an eye on it —
-        from the terminal or from this studio. Everything stays on your machine; the bot
-        token never leaves it. Made with care by the CyberRage team.
-      </p>
+      <div class="panel-head"><h2 data-i18n="home.about">About</h2></div>
+      <p class="about-text" data-i18n="home.aboutText">tgpilot is a free, open-source tool for Telegram Serverless bots.</p>
       <div class="link-list">
         <a class="link-row" href="https://github.com/CyberRageAnonymous" target="_blank" rel="noopener">
           <span class="k">GitHub</span><span class="v">@CyberRageAnonymous</span>
@@ -154,7 +146,7 @@
   <!-- Network -->
   <section id="view-network" class="view" hidden>
     <div class="panel">
-      <div class="panel-head"><h2>How this machine reaches the cloud</h2></div>
+      <div class="panel-head"><h2 data-i18n="network.title">How this machine reaches the cloud</h2></div>
       <p class="about-text">
         If <code>cloud.telegram.org</code> is blocked on this network, send the traffic
         through a proxy. Both HTTP and SOCKS5 proxies work — the kind is detected
@@ -162,11 +154,11 @@
       </p>
       <div class="stack">
         <label class="field">
-          <span class="field-label">Proxy</span>
+          <span class="field-label" data-i18n="network.proxy">Proxy</span>
           <input id="net-proxy" type="text" spellcheck="false" placeholder="socks5://127.0.0.1:10809">
         </label>
         <label class="field">
-          <span class="field-label">Server (optional)</span>
+          <span class="field-label" data-i18n="network.server">Server</span>
           <input id="net-apiurl" type="text" spellcheck="false" placeholder="https://cloud.telegram.org">
         </label>
         <label class="field checkbox-field">
@@ -177,7 +169,7 @@
           </label>
         </label>
         <label class="field">
-          <span class="field-label">IP family</span>
+          <span class="field-label" data-i18n="network.family">IP family</span>
           <select id="net-family" class="select">
             <option value="auto">auto — try both, prefer the one that works</option>
             <option value="4">IPv4 only</option>
@@ -185,8 +177,8 @@
           </select>
         </label>
         <div class="stack-row">
-          <button id="btn-network-save" class="primary small">Save</button>
-          <button id="btn-network-test" class="ghost small">Test connection</button>
+          <button id="btn-network-save" class="primary small" data-i18n="network.save">Save</button>
+          <button id="btn-network-test" class="ghost small" data-i18n="network.test">Test connection</button>
         </div>
         <label class="switch">
           <input id="net-probe" type="checkbox">
@@ -206,140 +198,58 @@
     </div>
   </section>
 
+  <!-- Settings -->
+  <section id="view-settings" class="view" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2 data-i18n="settings.appearance">Appearance</h2>
+        <button id="btn-settings-close" class="ghost small" data-i18n="help.close">Back</button>
+      </div>
+      <div class="stack">
+        <label class="field">
+          <span class="field-label" data-i18n="settings.theme">Theme</span>
+          <select id="set-theme" class="select">
+            <option value="system" data-i18n="settings.themeSystem">Follow the system</option>
+            <option value="dark" data-i18n="settings.themeDark">Dark</option>
+            <option value="light" data-i18n="settings.themeLight">Light</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label" data-i18n="settings.language">Language</span>
+          <select id="set-lang" class="select">
+            <option value="en">English</option>
+            <option value="fa">فارسی</option>
+            <option value="zh">中文</option>
+            <option value="ru">Русский</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label" data-i18n="settings.fontSize">Editor font size</span>
+          <input id="set-font" type="range" min="11" max="18" step="1">
+        </label>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2 data-i18n="settings.backups">Backups</h2></div>
+      <div class="stack">
+        <label class="switch">
+          <input id="set-backup-push" type="checkbox">
+          <span><strong data-i18n="settings.backupBeforePush">Take a backup before every push</strong><br>
+          <span class="hint" data-i18n="settings.backupBeforePushText">A copy of the project is saved before anything is deployed.</span></span>
+        </label>
+      </div>
+    </div>
+  </section>
+
   <!-- The manual -->
   <section id="view-help" class="view" hidden>
     <div class="panel">
-      <div class="panel-head"><h2>tgpilot in one minute</h2>
-        <button id="btn-help-close" class="ghost small">Back</button>
+      <div class="panel-head"><h2 id="help-title">tgpilot in one minute</h2>
+        <button id="btn-help-close" class="ghost small" data-i18n="help.close">Back</button>
       </div>
-      <div class="about-text">
-        <p><strong>tgpilot</strong> runs your Telegram Serverless bot from a plain folder.
-        You write JavaScript, the cloud runs it — no server to keep alive, no deploy pipeline
-        to babysit. Everything stays on this machine; the bot token never leaves it.</p>
-        <p>Three ways to work with it: the <strong>studio</strong> in the browser (this one),
-        the <strong>terminal</strong> (<code>tgpilot help</code> lists every command), and
-        the <strong>files</strong> themselves — the studio edits the very files you would
-        edit by hand.</p>
-      </div>
+      <div id="help-body" class="about-text"></div>
     </div>
-
     <div class="panel">
-      <div class="panel-head"><h2>Getting started</h2></div>
-      <div class="about-text">
-        <ol class="help-steps">
-          <li><strong>Link a bot.</strong> Open @BotFather, pick your bot, go to
-          <em>Serverless → CLI Access</em> and copy the access token. Paste it in the
-          <em>Link</em> panel in the corner.</li>
-          <li><strong>Add a handler.</strong> Every update type is a function. Open
-          <em>Handlers</em>, press <em>+ module</em> and pick the update you want to react to.</li>
-          <li><strong>Try it without deploying.</strong> <em>Run</em> in the editor calls the
-          cloud with a sample payload and shows the live logs.</li>
-          <li><strong>Deploy.</strong> <em>Deploy &amp; status → Review changes</em> shows what
-          will go up; confirm and it is live.</li>
-        </ol>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>The project layout</h2></div>
-      <div class="about-text">
-        <pre class="help-tree">mybot/
-├── tgcloud/
-│   ├── handlers/     one file per update type (message.js, callback_query.js…)
-│   ├── endpoints/    functions your Mini App can call
-│   ├── lib/          shared modules you import
-│   └── schema.js     the tables and columns of your database
-├── dist/             the Mini App build (optional)
-└── tgcloud.jsonc     the project settings</pre>
-        <p>Only <code>handlers/</code> and <code>endpoints/</code> run in the cloud;
-        <code>lib/</code> is imported by them, and <code>schema.js</code> describes the
-        database. Everything else in the folder is yours — the studio shows it under
-        <em>Other files</em> and never deploys it.</p>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>Handlers, endpoints and the database</h2></div>
-      <div class="about-text">
-        <p><strong>A handler</strong> is one file per update type:</p>
-        <pre class="help-code">export default async function (message, ctx) {
-  await ctx.send('hello');
-}</pre>
-        <p><strong>An endpoint</strong> is a function your Mini App can call over HTTP.
-        <strong>schema.js</strong> describes your tables; changes to it become migrations
-        you review and apply in the <em>Database</em> section.</p>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>Backups</h2></div>
-      <div class="about-text">
-        <p>Save a copy of the project before a big change. If the bot breaks, restore the
-        copy with one click — the state at that moment is saved as a backup of its own,
-        so a restore can never destroy work.</p>
-        <p>In the terminal: <code>tgpilot backup</code>, <code>tgpilot backups</code>,
-        <code>tgpilot restore &lt;id&gt;</code>.</p>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>Several bots in one folder</h2></div>
-      <div class="about-text">
-        <p>A folder can be linked to more than one bot — a staging copy next to the live
-        one. Press the bot name in the top bar to link, switch or remove a profile.</p>
-        <p>In the terminal: <code>tgpilot login --profile staging &lt;token&gt;</code>,
-        <code>tgpilot profiles</code>, <code>tgpilot profiles --use staging</code>.</p>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>When the cloud cannot be reached</h2></div>
-      <div class="about-text">
-        <p>The <em>Network</em> card on the home page says how this machine reaches the
-        cloud: the proxy that is running, the DNS answer and the route. If telegram.org
-        is blocked on your network, point tgpilot at a proxy — HTTP or SOCKS5, the kind is
-        detected on its own:</p>
-        <pre class="help-code">export TGPILOT_PROXY=socks5://127.0.0.1:10808
-tgpilot ping</pre>
-        <p>Add the same address in the <em>Network</em> card and it is stored with the
-        project. A filtered DNS can be worked around with DNS over HTTPS
-        (<code>TGPILOT_DOH=1</code>).</p>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>The terminal</h2></div>
-      <div class="about-text">
-        <p>The studio is one way in; the terminal is the other. The most useful commands:</p>
-        <ul class="help-list">
-          <li><code>tgpilot status</code> — what differs from the bot</li>
-          <li><code>tgpilot diff</code> — the changes, line by line</li>
-          <li><code>tgpilot push</code> — deploy the changes</li>
-          <li><code>tgpilot run message '{"text":"hi"}'</code> — run a handler in the cloud</li>
-          <li><code>tgpilot migrate</code> — walk through the database changes</li>
-          <li><code>tgpilot webhook</code> — the webhook state</li>
-          <li><code>tgpilot logs</code> — the journal of this tool</li>
-          <li><code>tgpilot help</code> — the full list</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>When something goes wrong</h2></div>
-      <div class="about-text">
-        <p>Errors in the studio come as a report: what happened, which file failed and a
-        button that opens the file at the right line. The journal keeps the rest:</p>
-        <ul class="help-list">
-          <li><code>tgpilot logs</code> — everything this tool did</li>
-          <li><code>tgpilot ping</code> — is the cloud reachable at all</li>
-          <li><code>tgpilot status</code> — does the folder still match the bot</li>
-          <li><code>tgpilot backup</code> — save the state before trying something risky</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>Links</h2></div>
+      <div class="panel-head"><h2 data-i18n="home.about">Links</h2></div>
       <div class="link-list">
         <a class="link-row" href="https://github.com/CyberRageAnonymous/tgpilot" target="_blank" rel="noopener">
           <span class="k">The project</span><span class="v">github.com/CyberRageAnonymous/tgpilot</span>
@@ -359,20 +269,20 @@ tgpilot ping</pre>
     <div class="crumb" id="folder-crumb"></div>
     <div class="file-list" id="folder-list"></div>
     <div class="view-actions">
-      <button id="btn-new-module" class="primary">+ module</button>
-      <button id="btn-new-file" class="ghost">+ file</button>
+      <button id="btn-new-module" class="primary" data-i18n="files.newModule">+ module</button>
+      <button id="btn-new-file" class="ghost" data-i18n="files.newFile">+ file</button>
     </div>
   </section>
 
   <!-- Editor -->
   <section id="view-editor" class="view" hidden>
     <div class="editor-head">
-      <span id="editor-path" class="editor-path">no file open</span>
+      <span id="editor-path" class="editor-path" data-i18n="editor.noFile">no file open</span>
       <span id="editor-dirty" class="dirty-dot" hidden>●</span>
       <span class="spacer"></span>
-      <button id="btn-run-editor" class="ghost small" hidden>Run</button>
-      <button id="btn-save" class="primary small" disabled>Save</button>
-      <button id="btn-delete" class="ghost small" disabled>Delete</button>
+      <button id="btn-run-editor" class="ghost small" hidden data-i18n="editor.run">Run</button>
+      <button id="btn-save" class="primary small" disabled data-i18n="editor.save">Save</button>
+      <button id="btn-delete" class="ghost small" disabled data-i18n="editor.delete">Delete</button>
     </div>
     <textarea id="editor" spellcheck="false" disabled></textarea>
   </section>
@@ -386,13 +296,13 @@ tgpilot ping</pre>
       </button>
     </div>
     <div class="panel">
-      <div class="panel-head"><h2>Database changes</h2>
-        <button id="btn-migrate-check" class="ghost small">Check</button>
+      <div class="panel-head"><h2 data-i18n="db.title">Database changes</h2>
+        <button id="btn-migrate-check" class="ghost small" data-i18n="db.check">Check</button>
       </div>
-      <div id="migrate-box" class="status-box"><div class="hint">compare schema.js against the database</div></div>
+      <div id="migrate-box" class="status-box"><div class="hint" data-i18n="db.hint">compare schema.js against the database</div></div>
       <div class="stack" id="migrate-actions" hidden>
-        <button id="btn-migrate-apply" class="primary small">Apply selected</button>
-        <button id="btn-migrate-recheck" class="ghost small">Re-check</button>
+        <button id="btn-migrate-apply" class="primary small" data-i18n="db.apply">Apply selected</button>
+        <button id="btn-migrate-recheck" class="ghost small" data-i18n="db.recheck">Re-check</button>
       </div>
     </div>
   </section>
@@ -400,14 +310,15 @@ tgpilot ping</pre>
   <!-- Deploy & status -->
   <section id="view-deploy" class="view" hidden>
     <div class="panel">
-      <div class="panel-head"><h2>What differs from the bot</h2>
-        <button id="btn-status" class="ghost small">Refresh</button>
+      <div class="panel-head"><h2 data-i18n="deploy.diffTitle">What differs from the bot</h2>
+        <button id="btn-status" class="ghost small" data-i18n="deploy.refresh">Refresh</button>
       </div>
       <div id="status-box" class="status-box"></div>
       <div class="stack">
-        <button id="btn-push" class="primary">Review changes…</button>
-        <button id="btn-fetch" class="ghost">Refresh snapshot from the bot</button>
-        <div class="hint">push deploys changed modules and the Mini App build</div>
+        <button id="btn-push" class="primary" data-i18n="deploy.review">Review changes…</button>
+        <button id="btn-sync" class="ghost" data-i18n="deploy.sync">Sync from the bot</button>
+        <button id="btn-fetch" class="ghost" data-i18n="deploy.fetch">Refresh snapshot from the bot</button>
+        <div class="hint" data-i18n="deploy.hint">push deploys changed modules</div>
       </div>
     </div>
 
@@ -444,7 +355,7 @@ tgpilot ping</pre>
     <span>Yes, delete the marked modules on the bot.</span>
   </label>
   <div class="dialog-actions">
-    <button class="ghost" data-close>Cancel</button>
+    <button class="ghost" data-close data-i18n="common.cancel">Cancel</button>
     <button id="btn-push-confirm" class="primary">Deploy</button>
   </div>
 </dialog>
@@ -458,7 +369,7 @@ tgpilot ping</pre>
   </div>
   <input id="link-token" class="text-input" placeholder="app&lt;id&gt;:&lt;secret&gt;" autocomplete="off" spellcheck="false">
   <div class="dialog-actions">
-    <button class="ghost" data-close>Cancel</button>
+    <button class="ghost" data-close data-i18n="common.cancel">Cancel</button>
     <button id="btn-link-save" class="primary">Link</button>
   </div>
 </dialog>
@@ -468,7 +379,7 @@ tgpilot ping</pre>
   <div class="hint">A module path relative to <code>tgcloud/</code>, without .js — e.g. <code>handlers/inline_mode</code> or <code>lib/pagination</code>.</div>
   <input id="new-module-path" class="text-input" placeholder="handlers/name" spellcheck="false">
   <div class="dialog-actions">
-    <button class="ghost" data-close>Cancel</button>
+    <button class="ghost" data-close data-i18n="common.cancel">Cancel</button>
     <button id="btn-new-module-save" class="primary">Create</button>
   </div>
 </dialog>
@@ -478,7 +389,7 @@ tgpilot ping</pre>
   <div class="hint">Any file inside the project — e.g. <code>README.md</code> or <code>tgcloud.jsonc</code>.</div>
   <input id="new-file-path" class="text-input" placeholder="README.md" spellcheck="false">
   <div class="dialog-actions">
-    <button class="ghost" data-close>Cancel</button>
+    <button class="ghost" data-close data-i18n="common.cancel">Cancel</button>
     <button id="btn-new-file-save" class="primary">Create</button>
   </div>
 </dialog>
@@ -489,55 +400,67 @@ tgpilot ping</pre>
   <input id="run-args" class="text-input" placeholder="{ text: 'hi' }" spellcheck="false">
   <pre id="run-out" class="run-out" hidden></pre>
   <div class="dialog-actions">
-    <button class="ghost" data-close>Close</button>
+    <button class="ghost" data-close data-i18n="common.close">Close</button>
     <button id="btn-run" class="primary">Run</button>
   </div>
 </dialog>
 
-<dialog id="dialog-profiles" class="dialog dialog-narrow">
-  <div class="dialog-head"><h3>Bots in this folder</h3><button class="ghost small" data-close>×</button></div>
+<dialog id="dialog-sync" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3 data-i18n="sync.title">Sync from the bot</h3><button class="ghost small" data-close>×</button></div>
   <div class="dialog-body">
-    <p class="hint">A folder can talk to more than one bot — a staging copy next to the live one.</p>
+    <p class="hint" data-i18n="sync.text">The bot is the truth.</p> Files that changed on another device — or were added from a phone — come into this folder. Local files the bot never knew stay untouched.</p>
+    <div id="sync-list" class="status-box"></div>
+  </div>
+  <div class="dialog-actions">
+    <button class="ghost" data-close data-i18n="common.cancel">Cancel</button>
+    <button id="btn-sync-apply" class="primary" data-i18n="sync.apply">Sync</button>
+  </div>
+</dialog>
+
+<dialog id="dialog-profiles" class="dialog dialog-narrow">
+  <div class="dialog-head"><h3 data-i18n="profiles.title">Bots in this folder</h3><button class="ghost small" data-close>×</button></div>
+  <div class="dialog-body">
+    <p class="hint" data-i18n="profiles.text">A folder can talk to more than one bot.</p>
     <div id="profile-list" class="file-list"></div>
     <div class="stack">
       <label class="field">
-        <span class="field-label">Link another bot</span>
+        <span class="field-label" data-i18n="profiles.linkToken">access token</span>
         <input id="profile-token" type="password" spellcheck="false" placeholder="access token from @BotFather">
       </label>
       <label class="field">
-        <span class="field-label">Name</span>
+        <span class="field-label" data-i18n="profiles.name">Name</span>
         <input id="profile-name" type="text" spellcheck="false" placeholder="staging">
       </label>
-      <button id="btn-profile-link" class="primary small">Link this bot</button>
+      <button id="btn-profile-link" class="primary small" data-i18n="profiles.link">Link this bot</button>
     </div>
   </div>
-  <div class="dialog-actions"><button class="ghost" data-close>Close</button></div>
+  <div class="dialog-actions"><button class="ghost" data-close data-i18n="common.close">Close</button></div>
 </dialog>
 
 <dialog id="dialog-backup" class="dialog dialog-narrow">
-  <div class="dialog-head"><h3>Restore this backup?</h3><button class="ghost small" data-close>×</button></div>
+  <div class="dialog-head"><h3 data-i18n="backup.restoreTitle">Restore this backup?</h3><button class="ghost small" data-close>×</button></div>
   <div class="dialog-body">
-    <p class="error-msg" id="backup-restore-text">The files in the project are replaced by the ones in the backup.</p>
-    <p class="hint">The state right now is saved as a backup first, so nothing is lost.</p>
+    <p class="error-msg" id="backup-restore-text" data-i18n="backup.restoreText">The files in the project are replaced.</p>
+    <p class="hint" data-i18n="backup.restoreHint">The state right now is saved as a backup first.</p>
   </div>
   <div class="dialog-actions">
-    <button class="ghost" data-close>Cancel</button>
-    <button id="btn-backup-restore" class="primary">Restore</button>
+    <button class="ghost" data-close data-i18n="common.cancel">Cancel</button>
+    <button id="btn-backup-restore" class="primary" data-i18n="backup.restore">Restore</button>
   </div>
 </dialog>
 
 <dialog id="dialog-error" class="dialog dialog-narrow">
-  <div class="dialog-head"><h3 id="dialog-error-title">That did not work</h3><button class="ghost small" data-close>×</button></div>
+  <div class="dialog-head"><h3 id="dialog-error-title" data-i18n="common.error">That did not work</h3><button class="ghost small" data-close>×</button></div>
   <div class="dialog-body">
     <div id="dialog-error-msg" class="error-msg"></div>
     <div id="dialog-error-details" class="error-details" hidden></div>
   </div>
   <div class="dialog-actions">
-    <button id="dialog-error-open" class="primary small" hidden>Open the file</button>
-    <button class="ghost" data-close>Close</button>
+    <button id="dialog-error-open" class="primary small" hidden data-i18n="common.openFile">Open the file</button>
+    <button class="ghost" data-close data-i18n="common.close">Close</button>
   </div>
 </dialog>
 
-<script src="/app.js"></script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

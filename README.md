@@ -126,6 +126,24 @@ tgpilot profiles --use staging  # switch
 
 The studio switches bots from the pill in the top bar.
 
+## The studio's language and theme
+
+The studio speaks English, Persian, Chinese and Russian, and it can follow
+the system's light or dark theme. Both are settings of the person using it
+(the **Settings** button in the top bar), so they live in the browser, not in
+the project. The first visit picks the language the browser asks for.
+
+## Sync: what the bot knows comes back
+
+A bot can be changed from a phone or from another machine. **Sync from the
+bot** in the studio asks the cloud what it holds and brings it into the
+folder — new files included. Files the cloud never knew (your own helpers and
+notes) are never touched, and a backup is taken before anything is written.
+
+```bash
+tgpilot pull       # the same thing in the terminal
+```
+
 ## The web studio
 
 ```bash

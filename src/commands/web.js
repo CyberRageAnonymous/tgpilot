@@ -37,6 +37,12 @@ export async function registerWeb(argv) {
     routes({ req, res }, () => {
       // Anything unmatched: serve the studio UI for the top level, 404 otherwise.
       if (uiDir && (req.method === 'GET' || req.method === 'HEAD') && (req.url === '/' || !req.url.startsWith('/api/'))) {
+        // The studio is a small set of files; anything that is not one of
+        // them gets the page itself.
+        const file = req.url.split('?')[0].replace(/^\//, '');
+        if (['i18n.js', 'settings.js', 'help.js', 'app.js', 'style.css'].includes(file)) {
+          return serveFile(uiDir, file, res);
+        }
         return serveFile(uiDir, 'index.html', res);
       }
       notFound(res);
@@ -73,10 +79,17 @@ export async function registerWeb(argv) {
   return new Promise(() => {});
 }
 
+const CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+};
+
 function serveFile(dir, name, res) {
   const full = path.join(dir, name);
   if (!fs.existsSync(full)) return notFound(res);
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  const type = CONTENT_TYPES[path.extname(name)] || 'text/plain; charset=utf-8';
+  res.writeHead(200, { 'Content-Type': type });
   res.end(fs.readFileSync(full));
 }
 

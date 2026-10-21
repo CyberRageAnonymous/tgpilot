@@ -13,10 +13,14 @@ const state = {
   dirty: false,
   migrationIds: [],
   lastStatus: null,
+  token: null,
   runnable: ['handlers', 'endpoints'],
   fromView: null,
   editorModule: null,
 };
+
+import { t, getSettings, setSetting, applySettings, applyTranslations, guessLanguage } from './settings.js';
+import { HELP } from './help.js';
 
 // --- fetch helpers -----------------------------------------------------------
 
@@ -110,14 +114,21 @@ function toast(text) {
 // --- views -------------------------------------------------------------------
 
 const SECTION_TITLES = {
-  home: 'tgpilot studio',
-  help: 'Help',
-  deploy: 'Deploy & status',
-  files: 'Files',
-  editor: 'Editor',
-  database: 'Database',
-  network: 'Network',
+  home: 'app.title',
+  help: 'app.help',
+  deploy: 'section.deploy',
+  files: 'section.library',
+  editor: 'editor.save',
+  database: 'section.database',
+  network: 'network.title',
+  settings: 'app.settings',
 };
+
+// The title of a view, in the language of the moment.
+function viewTitle(view) {
+  const key = SECTION_TITLES[view];
+  return key ? t(key) : t('app.title');
+}
 
 // The folder each section browses; the cloud module folders live under tgcloud/.
 const SECTIONS = {
@@ -135,20 +146,19 @@ function show(view, section) {
     el.hidden = el.id !== `view-${view}`;
   }
   $('btn-back').hidden = view === 'home';
-  $('top-title').textContent = state.section
-    ? sectionTitle(state.section)
-    : (SECTION_TITLES[view] || 'tgpilot studio');
+  $('top-title').textContent = state.section ? sectionTitle(state.section) : viewTitle(view);
   window.scrollTo(0, 0);
 }
 
 function sectionTitle(key) {
-  return ({
-    handlers: 'Handlers',
-    endpoints: 'Endpoints',
-    library: 'Library',
-    miniapp: 'Mini App Files',
-    other: 'Other files',
-  })[key] || SECTION_TITLES.files;
+  const map = {
+    handlers: 'section.handlers',
+    endpoints: 'section.endpoints',
+    library: 'section.library',
+    miniapp: 'section.miniapp',
+    other: 'section.other',
+  };
+  return t(map[key] || 'section.library');
 }
 
 function goBack() {
@@ -184,6 +194,15 @@ function wire() {
 
   $('btn-help').onclick = () => show('help');
   $('btn-help-close').onclick = () => show('home');
+  renderHelp();
+  $('btn-settings').onclick = () => openSettings().catch(showError);
+  $('btn-settings-close').onclick = () => show('home');
+  $('set-theme').onchange = (e) => changeSetting('theme', e.target.value);
+  $('set-lang').onchange = (e) => changeSetting('lang', e.target.value);
+  $('set-font').oninput = (e) => changeSetting('fontSize', Number(e.target.value));
+  $('set-backup-push').onchange = (e) => changeSetting('backupBeforePush', e.target.checked);
+  $('btn-help-close').onclick = () => show('home');
+  renderHelp();
   $('btn-profile').onclick = () => openProfiles().catch(showError);
   $('btn-profile-link').onclick = () => linkProfile().catch(showError);
   $('btn-link').onclick = () => $('dialog-link').showModal();
@@ -214,6 +233,8 @@ function wire() {
   $('btn-push').onclick = () => pushPreview().catch(showError);
   $('btn-push-confirm').onclick = () => pushConfirm().catch(showError);
   $('btn-fetch').onclick = () => doFetch().catch(showError);
+  $('btn-sync').onclick = () => syncPreview().catch(showError);
+  $('btn-sync-apply').onclick = () => syncApply().catch(showError);
   $('btn-status').onclick = () => refreshStatus().catch(showError);
 
   $('btn-migrate-check').onclick = () => migrateCheck().catch(showError);
@@ -229,6 +250,17 @@ function wire() {
   $('btn-network').onclick = () => openNetwork().catch(showError);
   $('btn-network-save').onclick = () => saveNetwork().catch(showError);
   $('btn-network-test').onclick = () => testNetwork().catch(showError);
+
+  // Shortcuts: ? opens the manual, Ctrl/Cmd+S saves, Escape leaves a dialog.
+  document.addEventListener('keydown', (event) => {
+    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName);
+    if (event.key === '?' && !typing) {
+      event.preventDefault();
+      show('help');
+      return;
+    }
+    if (event.key === 'Escape' && state.view === 'help') show('home');
+  });
 
   const editor = $('editor');
   editor.addEventListener('keydown', onEditorKey);
@@ -246,6 +278,12 @@ function wire() {
 
 boot();
 function boot() {
+  const settings = getSettings();
+  if (!settings.lang || settings.lang === 'en') {
+    // The first visit: speak the language the browser asks for.
+    setSetting('lang', guessLanguage());
+  }
+  applySettings();
   wire();
   start().catch(showError);
 }
@@ -259,6 +297,41 @@ async function start() {
   updateHomeSubs();
   loadBackups().catch(() => {});
   refreshNetworkSummary().catch(() => {});
+}
+
+// --- sync --------------------------------------------------------------------
+
+// The bot may have been changed somewhere else — a phone, another machine.
+// This shows what would come into the folder before anything is written.
+async function syncPreview() {
+  $('sync-list').innerHTML = `<div class="hint">${t('sync.asking')}</div>`;
+  const out = await POST('/api/sync/preview', {});
+  const preview = out.preview || { added: [], updated: [], removed: [], unchanged: [] };
+  const rows = [];
+  const group = (label, files, cls) => {
+    if (!files || !files.length) return;
+    rows.push(`<div class="line ${cls}">${label}</div>`);
+    for (const file of files) rows.push(`<div class="line meta">${escapeHtml(file)}</div>`);
+  };
+  group(t('sync.new'), preview.added, 'add');
+  group(t('sync.changed'), preview.updated, 'mod');
+  group(t('sync.gone'), preview.removed, 'del');
+  if (!rows.length) rows.push(`<div class="line meta">${t('sync.identical')}</div>`);
+  else group(t('sync.same'), preview.unchanged, 'meta');
+  $('sync-list').innerHTML = rows.join('');
+  $('dialog-sync').showModal();
+}
+
+async function syncApply() {
+  $('dialog-sync').close();
+  const out = await POST('/api/sync/apply', {});
+  const bits = [];
+  if (out.written?.length) bits.push(`${out.written.length} file(s) written`);
+  if (out.deleted?.length) bits.push(`${out.deleted.length} removed`);
+  toast(bits.length ? `${t('sync.done')}: ${bits.join(', ')}` : t('sync.identical'));
+  if (out.safety) toast(t('backup.safety', { id: out.safety.id }));
+  await Promise.all([loadTree(), refreshStatus(), refreshProject()]).catch(() => {});
+  updateHomeSubs();
 }
 
 // --- profiles ----------------------------------------------------------------
@@ -277,7 +350,7 @@ async function renderProfiles() {
   const out = await GET('/api/profiles');
   const profiles = out.profiles || [];
   if (!profiles.length) {
-    box.innerHTML = '<div class="hint">no bot linked yet</div>';
+    box.innerHTML = `<div class="hint">${t('profiles.none')}</div>`;
     return;
   }
   box.innerHTML = profiles
@@ -302,7 +375,7 @@ async function renderProfiles() {
 
 async function useProfile(name) {
   const out = await POST('/api/profiles/use', { name });
-  toast(`Now talking to "${name}"`);
+  toast(t('profiles.switched', { name }));
   $('dialog-profiles').close();
   await Promise.all([refreshProject(), refreshStatus(), loadTree()]).catch(() => {});
   updateHomeSubs();
@@ -314,7 +387,7 @@ async function linkProfile() {
   if (!token) return;
   const name = $('profile-name').value.trim() || 'default';
   const out = await POST('/api/profiles', { token, name });
-  toast(`Linked "${name}"`);
+  toast(t('profiles.linked', { name }));
   $('profile-token').value = '';
   $('profile-name').value = '';
   await renderProfiles();
@@ -325,10 +398,73 @@ async function linkProfile() {
 
 async function removeProfile(name) {
   await DEL('/api/profiles', { name });
-  toast(`Removed "${name}"`);
+  toast(t('profiles.removed', { name }));
   await renderProfiles();
   await Promise.all([refreshProject(), refreshStatus()]).catch(() => {});
   updateHomeSubs();
+}
+
+// --- the manual --------------------------------------------------------------
+
+// The manual is drawn from the dictionary, so it speaks the language of the
+// moment.
+function renderHelp() {
+  const sections = HELP[getSettings().lang] || HELP.en;
+  const parts = [];
+  for (const section of sections) {
+    parts.push(`<div class="help-section"><h3 class="help-heading">${escapeHtml(section.title)}</h3>`);
+    if (section.text) parts.push(`<p>${escapeHtml(section.text)}</p>`);
+    if (section.items) {
+      parts.push('<ul class="help-list">');
+      for (const item of section.items) parts.push(`<li>${escapeHtml(item)}</li>`);
+      parts.push('</ul>');
+    }
+    if (section.steps) {
+      parts.push('<ol class="help-steps">');
+      for (const step of section.steps) parts.push(`<li>${escapeHtml(step)}</li>`);
+      parts.push('</ol>');
+    }
+    if (section.tree) parts.push(`<pre class="help-tree">${escapeHtml(section.tree)}</pre>`);
+    if (section.code) parts.push(`<pre class="help-code">${escapeHtml(section.code)}</pre>`);
+    parts.push('</div>');
+  }
+  $('help-body').innerHTML = parts.join('');
+  $('help-title').textContent = sections[0]?.title || t('help.title');
+}
+
+// --- settings ----------------------------------------------------------------
+
+// Theme, language and the small comforts. They belong to the person using
+// the studio, so they live in this browser.
+function openSettings() {
+  const settings = getSettings();
+  $('set-theme').value = settings.theme;
+  $('set-lang').value = settings.lang;
+  $('set-font').value = String(settings.fontSize);
+  $('set-backup-push').checked = Boolean(settings.backupBeforePush);
+  show('settings');
+}
+
+function changeSetting(key, value) {
+  setSetting(key, value);
+  if (key === 'lang') {
+    // Everything that is drawn from a dictionary has to be drawn again.
+    applyTranslations();
+    refreshStaticText();
+    renderHelp();
+  }
+  if (key === 'fontSize') {
+    $('editor').style.fontSize = `${value}px`;
+  }
+  return getSettings();
+}
+
+// The texts the code writes into the page, so a language change is complete.
+function refreshStaticText() {
+  $('btn-profile').textContent = state.token ? `bot ${state.token.masked}` : t('app.notLinked');
+  $('hero-bot').textContent = state.token ? `bot ${state.token.masked}` : t('home.notLinkedYet');
+  updateHomeSubs();
+  loadBackups().catch(() => {});
 }
 
 // --- backups -----------------------------------------------------------------
@@ -347,7 +483,7 @@ async function loadBackups() {
   }
   const backups = out.backups || [];
   if (!backups.length) {
-    box.innerHTML = '<div class="hint">no backups yet — save one before your next big change</div>';
+    box.innerHTML = `<div class="hint">${t('backup.none')}</div>`;
     return;
   }
   box.innerHTML = backups
@@ -363,7 +499,7 @@ async function loadBackups() {
     .join('');
   for (const button of box.querySelectorAll('.backup-restore')) {
     button.onclick = () => {
-      $('backup-restore-text').textContent = `The files in the project are replaced by the ones in ${button.dataset.id}.`;
+      $('backup-restore-text').textContent = t('backup.restoreText', { id: button.dataset.id });
       $('btn-backup-restore').dataset.id = button.dataset.id;
       $('dialog-backup').showModal();
     };
@@ -371,10 +507,10 @@ async function loadBackups() {
 }
 
 async function createBackup() {
-  const label = window.prompt('Name this backup (optional):', '');
+  const label = window.prompt(t('backup.name'), '');
   if (label === null) return;
   const out = await POST('/api/backups', { label });
-  toast(`Backup saved: ${out.backup.id}`);
+  toast(t('backup.saved', { id: out.backup.id }));
   await loadBackups();
 }
 
@@ -383,7 +519,7 @@ async function restoreBackup() {
   $('dialog-backup').close();
   if (!id) return;
   const out = await POST('/api/backups/restore', { id });
-  toast(`${out.restored.length} files restored${out.safety ? ` — the previous state is saved as ${out.safety.id}` : ''}`);
+  toast(t('backup.restored', { n: out.restored.length }));
   await Promise.all([loadBackups(), loadTree(), refreshProject()]).catch(() => {});
   updateHomeSubs();
 }
@@ -397,7 +533,7 @@ async function openNetwork() {
   $('net-apiurl').value = config.apiUrl || '';
   $('net-family').value = config.family === 4 ? '4' : config.family === 6 ? '6' : 'auto';
   $('net-doh').checked = Boolean(config.doh);
-  $('net-result').innerHTML = '<div class="hint">run a test to see where the chain breaks</div>';
+  $('net-result').innerHTML = `<div class="hint">${t('network.test')}</div>`;
   show('network');
 }
 
@@ -407,7 +543,7 @@ async function saveNetwork() {
   const family = $('net-family').value;
   const doh = $('net-doh').checked;
   const out = await POST('/api/network', { proxy, apiUrl, family, doh });
-  toast(out.config.proxy ? `proxy saved: ${out.config.proxy}` : 'proxy cleared — direct connection');
+  toast(out.config.proxy ? t('network.proxySaved', { proxy: out.config.proxy }) : t('network.proxyCleared'));
   await refreshNetworkSummary();
   return out;
 }
@@ -415,7 +551,7 @@ async function saveNetwork() {
 async function testNetwork() {
   const proxy = $('net-proxy').value.trim();
   const apiUrl = $('net-apiurl').value.trim();
-  $('net-result').innerHTML = '<div class="hint">testing…</div>';
+  $('net-result').innerHTML = `<div class="hint">${t('network.test')}…</div>`;
   const out = await POST('/api/network/test', { proxy, apiUrl, probe: $('net-probe').checked });
   const localStep = (out.steps || []).find((s) => s.id === 'local-proxy');
   const useButton = localStep
@@ -474,6 +610,7 @@ async function refreshProject() {
   state.staticSource = info.static ? info.static.source : null;
   state.handlerTypes = info.handlerTypes || [];
   const token = info.token;
+  state.token = token;
   $('btn-profile').textContent = token ? `bot ${token.masked}` : 'not linked';
   $('btn-profile').classList.toggle('linked', Boolean(token));
   $('btn-unlink').hidden = !token;
@@ -1018,10 +1155,11 @@ async function pushPreview() {
 }
 
 async function pushConfirm() {
-  const out = await POST('/api/push', { confirm: true });
+  const settings = getSettings();
+  const out = await POST('/api/push', { confirm: true, backup: Boolean(settings.backupBeforePush) });
   $('dialog-push').close();
   if (out.nothing) {
-    toast('nothing to deploy — the folder matches the bot');
+    toast(t('deploy.nothing'));
     await refreshStatus().catch(() => {});
     updateHomeSubs();
     return;
@@ -1047,32 +1185,63 @@ async function doFetch() {
 
 async function migrateCheck() {
   const out = await GET('/api/migrate');
-  state.migrationIds = out.ids.slice();
   const box = $('migrate-box');
   box.textContent = '';
   if (!out.dbChanges.length) {
-    box.innerHTML = '<div class="line ok-badge">✓ database in sync</div>';
+    box.innerHTML = `<div class="line ok-badge">✓ ${t('db.inSync')}</div>`;
     $('migrate-actions').hidden = true;
+    state.migrationIds = [];
     return;
   }
+
+  // A check that was ticked before stays ticked, even when the list is
+  // drawn again.
+  const chosen = new Set(state.migrationIds);
+  state.migrationIds = [];
+  box.innerHTML = '';
+
   for (let i = 0; i < out.dbChanges.length; i++) {
     const change = out.dbChanges[i];
-    const el = document.createElement('div');
+    const id = change.id_override !== undefined ? change.id_override : out.ids[i];
+    const locked = change.status === 'manual' || change.status === 'undocumented';
+
+    const el = document.createElement('label');
     el.className = 'card' + (change.status === 'manual' ? ' negative' : change.status === 'warning' ? ' warn' : '');
-    const label = document.createElement('label');
-    label.style.display = 'flex';
-    label.style.gap = '8px';
+    el.title = locked ? 'This change has to be done by hand' : 'Click to select';
+
     const boxy = document.createElement('input');
     boxy.type = 'checkbox';
-    boxy.checked = out.dbChanges.length >= 1 && change.status !== 'manual' && change.status !== 'undocumented';
-    boxy.dataset.id = change.id_override !== undefined ? change.id_override : out.ids[i];
-    if (change.status === 'manual' || change.status === 'undocumented') boxy.disabled = true;
+    boxy.checked = chosen.has(id) || (chosen.size === 0 && !locked);
+    boxy.dataset.id = id;
+    if (locked) boxy.disabled = true;
+
     const text = document.createElement('span');
     text.textContent = out.cards[i];
-    label.appendChild(boxy);
-    label.appendChild(text);
-    el.appendChild(label);
+
+    el.appendChild(boxy);
+    el.appendChild(text);
     box.appendChild(el);
+
+    if (boxy.checked) {
+      state.migrationIds.push(id);
+      el.classList.add('picked');
+    }
+
+    // The whole card is the switch: click the text, click the box.
+    const toggle = () => {
+      if (boxy.disabled) return;
+      boxy.checked = !boxy.checked;
+      el.classList.toggle('picked', boxy.checked);
+      state.migrationIds = [...document.querySelectorAll('#migrate-box input[type=checkbox]:checked')].map((cb) => cb.dataset.id);
+    };
+    boxy.onclick = (event) => {
+      event.preventDefault();
+      toggle();
+    };
+    el.onclick = (event) => {
+      if (event.target === boxy) return;
+      toggle();
+    };
   }
   $('migrate-actions').hidden = false;
 }
@@ -1080,12 +1249,12 @@ async function migrateCheck() {
 async function migrateApply() {
   const ids = [...document.querySelectorAll('#migrate-box input[type=checkbox]:checked')].map((cb) => cb.dataset.id);
   if (!ids.length) {
-    toast('nothing selected');
+    toast(t('db.nothingSelected'));
     return;
   }
-  if (!confirm(`Apply ${ids.length} change(s) to the database?`)) return;
+  if (!confirm(t('db.confirm', { n: ids.length }))) return;
   const out = await POST('/api/migrate', { ids });
-  toast(`applied ${out.applied} change(s)`);
+  toast(t('db.applied', { n: out.applied }));
   await migrateCheck();
 }
 
