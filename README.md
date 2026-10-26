@@ -116,9 +116,13 @@ The studio has the same thing in the **Backups** card on the home page.
 ## The studio's language and theme
 
 The studio speaks English, Persian, Chinese and Russian, and it can follow
-the system's light or dark theme. Both are settings of the person using it
-(the **Settings** button in the top bar), so they live in the browser, not in
-the project. The first visit picks the language the browser asks for.
+the system's light or dark theme, or take the **Luxury** one — warm obsidian
+and champagne gold, with a background that breathes, light that travels
+across the title and buttons a band of light crosses on hover (it holds still
+when the system asks for reduced motion). Both are settings of the person
+using it (the **Settings** button in the top bar), so they live in the
+browser, not in the project. The first visit picks the language the browser
+asks for.
 
 ## Sync: what the bot knows comes back
 

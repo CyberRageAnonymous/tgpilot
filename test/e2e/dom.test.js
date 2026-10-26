@@ -70,3 +70,29 @@ test('the studio asks for a bot instead of showing files', async () => {
   assert.match(app, /function applyBotState\(\)/, 'the editor follows the same rule');
   assert.match(app, /\$\('editor'\)\.disabled = true/, 'the editor cannot be written in');
 });
+
+test('the luxury theme is offered, complete and self-contained', async () => {
+  const fs = await import('node:fs');
+  const css = fs.readFileSync(path.join(root, 'webui', 'style.css'), 'utf-8');
+  const dict = fs.readFileSync(path.join(root, 'webui', 'i18n.js'), 'utf-8');
+
+  // The settings offer it, in every language the studio speaks.
+  assert.match(html(), /<option value="luxury"/, 'the theme is in the list');
+  for (const lang of ['en', 'fa', 'zh', 'ru']) {
+    assert.match(dict, new RegExp(`'settings.themeLuxury': '[^']+',`), `it is named in ${lang}`);
+  }
+
+  // It paints itself, rather than borrowing the dark or the light palette.
+  assert.match(css, /html\[data-theme="luxury"\] \{/, 'it brings its own colors');
+  assert.match(css, /--accent: #d9b46a;/, 'gold is the accent');
+  assert.match(css, /html:not\(\[data-theme="dark"\]\):not\(\[data-theme="luxury"\]\) \{/,
+    'the light palette knows to leave it alone');
+
+  // It moves: the aurora, the light across the title, the sweep on a button.
+  assert.match(css, /@keyframes luxuryAurora/, 'the background breathes');
+  assert.match(css, /@keyframes luxuryShimmer/, 'the title catches light');
+  assert.match(css, /@keyframes luxurySweep/, 'a button is crossed by light');
+  // And it holds still when the person asked for that.
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?html\[data-theme="luxury"\] body::before/,
+    'the motion can be turned off by the system setting');
+});
