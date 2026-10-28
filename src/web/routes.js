@@ -7,6 +7,7 @@ import { localDiff } from '../project/diff.js';
 import { peekToken, maskToken, tokenEnvName, verifyToken, unlinkBot, hasLinkedBot } from '../project/credentials.js';
 import { planPush, makeStaticPlan, settleRevision, sendDeploy, absorbResponse, isRevisionMismatch } from '../project/deploy.js';
 import { runFunction, getWebhook, syncWebhook, getMigrationStatus, applyMigration, getFiles } from '../api/endpoints.js';
+import { callBotApi, readBotProfile } from '../api/botapi.js';
 import { replaceSnapshot, readSnapshotFile, snapshotExists, pathToModule } from '../project/snapshot.js';
 import { loadState, saveState, saveCredentials, loadCredentials } from '../project/state.js';
 import { saveStaticSnapshot, loadStaticSnapshot, scanStatic, staticDiff, formatBytes } from '../project/static.js';
@@ -43,6 +44,9 @@ export function createRoutes(root, uiDir) {
     ['GET /api/status', () => handleStatus()],
     ['POST /api/bot', (body) => handleBotLink(body)],
     ['DELETE /api/bot', () => handleBotUnlink()],
+    ['GET /api/bot/profile', () => handleBotProfileGet()],
+    ['POST /api/bot/profile', (body) => handleBotProfileSave(body)],
+    ['POST /api/bot/menu', (body) => handleBotMenuSave(body)],
     ['POST /api/push', (body) => handlePush(project, body)],
     ['POST /api/fetch', () => handleFetch()],
     ['POST /api/run', (body) => handleRun(body)],
@@ -424,6 +428,65 @@ function handleBotUnlink() {
   unlinkBot();
   log('info', 'logout', 'Token removed from the studio.', { token: maskToken(saved?.token) });
   return { ok: true };
+}
+
+// The bot's own profile: its name, what it says about itself, and the button
+// beside the message field. Every call runs inside the platform — the studio
+// stores none of it, it only shows what Telegram holds.
+
+async function handleBotProfileGet() {
+  const profile = await readBotProfile(requiredToken());
+  return { ok: true, profile };
+}
+
+const PROFILE_FIELDS = [
+  ['name', 'setMyName', 'name', true],
+  ['description', 'setMyDescription', 'description', false],
+  ['short', 'setMyShortDescription', 'short_description', false],
+];
+
+async function handleBotProfileSave(body) {
+  const token = requiredToken();
+  const saved = {};
+  for (const [key, method, field, required] of PROFILE_FIELDS) {
+    if (body?.[key] === undefined) continue;
+    const text = String(body[key]).trim();
+    if (required && !text) throw badRequest(`The ${key} cannot be empty.`);
+    await callBotApi(token, method, { [field]: text });
+    saved[key] = text;
+  }
+  if (!Object.keys(saved).length) throw badRequest('Nothing to save.');
+  log('info', 'bot', 'Profile updated from the studio.', { fields: Object.keys(saved).join(',') });
+  return { ok: true, saved };
+}
+
+async function handleBotMenuSave(body) {
+  const token = requiredToken();
+  const type = String(body?.type || '').trim();
+
+  if (type === 'default') {
+    await callBotApi(token, 'setChatMenuButton', { menu_button: { type: 'default' } });
+    log('info', 'bot', 'Menu button reset from the studio.', { type });
+    return { ok: true, menu: { type: 'default' } };
+  }
+
+  if (type === 'commands') {
+    const menu = { type: 'commands', text: String(body?.text || '').trim() || 'Commands' };
+    await callBotApi(token, 'setChatMenuButton', { menu_button: menu });
+    log('info', 'bot', 'Menu button set from the studio.', { type });
+    return { ok: true, menu };
+  }
+
+  if (type === 'web_app') {
+    const url = String(body?.url || '').trim();
+    if (!/^https:\/\//i.test(url)) throw badRequest('A Mini App address has to be https.');
+    const menu = { type: 'web_app', text: String(body?.text || '').trim() || 'Open', web_app: { url } };
+    await callBotApi(token, 'setChatMenuButton', { menu_button: menu });
+    log('info', 'bot', 'Menu button set from the studio.', { type });
+    return { ok: true, menu };
+  }
+
+  throw badRequest('The menu button must be "default", "commands" or "web_app".');
 }
 
 // POST /api/push: preview first, then {confirm: true} to actually deploy.

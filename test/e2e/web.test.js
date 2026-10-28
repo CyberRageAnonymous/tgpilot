@@ -296,3 +296,56 @@ test('linking a bot brings its files into the folder', async () => {
     child.kill('SIGTERM');
   }
 });
+
+test('the studio reads and writes the bot profile and its menu button', async () => {
+  const port = await freePort();
+  const child = await startStudio(proj, port);
+  try {
+    const before = await api(port, '/api/bot/profile');
+    assert.equal(before.status, 200, before.text);
+    assert.equal(before.json.profile.name, 'Mock Bot');
+    assert.equal(before.json.profile.menu.type, 'default');
+
+    const saved = await api(port, '/api/bot/profile', {
+      method: 'POST',
+      body: { name: 'Studio Bot', short: 'Short.', description: 'Long.' },
+    });
+    assert.equal(saved.status, 200, saved.text);
+    assert.deepEqual(saved.json.saved, { name: 'Studio Bot', short: 'Short.', description: 'Long.' });
+
+    const after = await api(port, '/api/bot/profile');
+    assert.equal(after.json.profile.name, 'Studio Bot');
+    assert.equal(after.json.profile.short, 'Short.');
+    assert.equal(after.json.profile.description, 'Long.');
+
+    const menu = await api(port, '/api/bot/menu', {
+      method: 'POST',
+      body: { type: 'web_app', text: 'Open', url: 'https://example.com/app' },
+    });
+    assert.equal(menu.status, 200, menu.text);
+
+    const withMenu = await api(port, '/api/bot/profile');
+    assert.equal(withMenu.json.profile.menu.type, 'web_app');
+    assert.equal(withMenu.json.profile.menu.text, 'Open');
+    assert.equal(withMenu.json.profile.menu.web_app.url, 'https://example.com/app');
+
+    const badUrl = await api(port, '/api/bot/menu', {
+      method: 'POST',
+      body: { type: 'web_app', url: 'http://example.com/app' },
+    });
+    assert.equal(badUrl.status, 400, badUrl.text);
+    assert.match(badUrl.json.error, /https/);
+
+    const empty = await api(port, '/api/bot/profile', { method: 'POST', body: { name: '   ' } });
+    assert.equal(empty.status, 400, empty.text);
+    assert.match(empty.json.error, /cannot be empty/);
+
+    // A description is allowed to be cleared; the name is not.
+    const cleared = await api(port, '/api/bot/profile', { method: 'POST', body: { short: '' } });
+    assert.equal(cleared.status, 200, cleared.text);
+    const afterClear = await api(port, '/api/bot/profile');
+    assert.equal(afterClear.json.profile.short, '');
+  } finally {
+    child.kill('SIGTERM');
+  }
+});

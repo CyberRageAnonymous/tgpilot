@@ -26,6 +26,7 @@ export class Project {
   constructor(cloud, token, name = 'proj') {
     this.dir = fs.mkdtempSync(path.join(os.tmpdir(), `tgpilot-${name}-`));
     this.baseUrl = cloud.baseUrl;
+    this.token = token || '';
     this.env = {
       ...process.env,
       TGPILOT_API_URL: cloud.baseUrl,

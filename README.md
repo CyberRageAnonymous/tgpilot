@@ -99,6 +99,28 @@ block at a build output folder:
 keeps a hash-based snapshot in `.tgpilot/static.json` and prints the public
 URL of the Mini App. `"static": false` takes the build back down.
 
+## The bot's own profile
+
+A bot is more than its code. `tgpilot bot` shows what Telegram holds — the
+name, the two descriptions and the button beside the message field — and the
+same command changes them:
+
+```bash
+tgpilot bot                          # the profile as it is right now
+tgpilot bot name "Weather Fox"
+tgpilot bot description "Hourly weather, in one short message."
+tgpilot bot short "Weather, hourly."
+tgpilot bot menu https://example.com/app Open   # the button opens a Mini App
+tgpilot bot menu commands                      # or the command list
+tgpilot bot menu off                           # or Telegram's own button
+```
+
+The studio has the same thing in **Bot profile** on the home page.
+
+These calls run inside the platform, which already holds the bot's
+credentials: the access token stays where it is, and nothing new is saved on
+this machine.
+
 ## Backups
 
 A copy of the project, safe to roll back to. Take one before a big change;

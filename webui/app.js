@@ -117,6 +117,7 @@ const SECTION_TITLES = {
   home: 'app.title',
   help: 'app.help',
   deploy: 'section.deploy',
+  bot: 'section.bot',
   files: 'section.library',
   editor: 'editor.save',
   database: 'section.database',
@@ -204,6 +205,9 @@ function wire() {
   $('set-backup-push').onchange = (e) => changeSetting('backupBeforePush', e.target.checked);
   $('btn-help-close').onclick = () => show('home');
   renderHelp();
+  $('btn-bot-save').onclick = () => saveBotProfile().catch(showError);
+  $('btn-bot-menu-save').onclick = () => saveBotMenu().catch(showError);
+  $('bot-menu-type').onchange = syncMenuFields;
   $('btn-link').onclick = () => $('dialog-link').showModal();
   $('btn-link-save').onclick = () => linkBot().catch(showError);
   $('btn-unlink').onclick = () => unlinkBot().catch(showError);
@@ -471,6 +475,56 @@ function refreshStaticText() {
 
 // Theme, language and the small comforts. They belong to the person using
 // the studio, so they live in this browser.
+
+// --- the bot's own profile ------------------------------------------------
+
+// Telegram holds the name and the descriptions; the studio borrows the
+// fields and writes them back through the platform, one call per field.
+function syncMenuFields() {
+  const type = $('bot-menu-type').value;
+  $('bot-menu-url-field').hidden = type !== 'web_app';
+  $('bot-menu-text-field').hidden = type === 'default';
+}
+
+async function loadBotProfile() {
+  const who = $('bot-who');
+  if (!state.token) {
+    who.textContent = t('home.notLinkedYet');
+    $('btn-bot-save').disabled = true;
+    $('btn-bot-menu-save').disabled = true;
+    return;
+  }
+  who.textContent = t('bot.checking');
+  const { profile } = await GET('/api/bot/profile');
+  who.textContent = `@${profile.username || '—'} · ${profile.id}`;
+  $('bot-name').value = profile.name || '';
+  $('bot-short').value = profile.short || '';
+  $('bot-description').value = profile.description || '';
+
+  const menu = profile.menu || { type: 'default' };
+  $('bot-menu-type').value = menu.type || 'default';
+  $('bot-menu-text').value = menu.text || '';
+  $('bot-menu-url').value = menu.web_app?.url || '';
+  syncMenuFields();
+  $('btn-bot-save').disabled = false;
+  $('btn-bot-menu-save').disabled = false;
+}
+
+async function saveBotProfile() {
+  const name = $('bot-name').value.trim();
+  const short = $('bot-short').value.trim();
+  const description = $('bot-description').value.trim();
+  const out = await POST('/api/bot/profile', { name, short, description });
+  if (out.ok) toast(t('bot.saved'));
+}
+
+async function saveBotMenu() {
+  const type = $('bot-menu-type').value;
+  const text = $('bot-menu-text').value.trim();
+  const url = $('bot-menu-url').value.trim();
+  await POST('/api/bot/menu', { type, text, url });
+  toast(t('bot.menuSaved'));
+}
 
 // --- backups -----------------------------------------------------------------
 
@@ -757,7 +811,7 @@ async function createSchema() {
 // --- sections ----------------------------------------------------------------
 
 async function openSection(key) {
-  if (!state.token && key !== 'deploy' && key !== 'help' && key !== 'settings') {
+  if (!state.token && key !== 'deploy' && key !== 'help' && key !== 'settings' && key !== 'bot') {
     // Without a bot there is no folder to work in.
     show('files');
     $('folder-crumb').textContent = '';
@@ -775,6 +829,11 @@ async function openSection(key) {
     show('database');
     initDatabaseView().catch(showError);
     migrateCheck().catch(showError);
+    return;
+  }
+  if (key === 'bot') {
+    show('bot');
+    await loadBotProfile();
     return;
   }
 

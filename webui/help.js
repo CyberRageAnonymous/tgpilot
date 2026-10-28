@@ -45,6 +45,11 @@ export const HELP = {
       code: 'tgpilot backup\ntgpilot backups\ntgpilot restore <id>',
     },
     {
+      title: 'The bot profile and its button',
+      text: 'The bot has a profile of its own: a name, a short and a long description, and the button beside the message field. The studio and the command line edit the same three things; the button can open a Mini App, the command list, or Telegram\'s own menu.',
+      code: 'tgpilot bot\ntgpilot bot name "Weather Fox"\ntgpilot bot menu https://example.com/app Open',
+    },
+    {
       title: 'When the cloud cannot be reached',
       text: 'The Network card says how this machine reaches the cloud: the proxy that is running, the DNS answer and the route. If telegram.org is blocked on your network, point tgpilot at a proxy — HTTP or SOCKS5, the kind is detected on its own.',
       code: 'export TGPILOT_PROXY=socks5://127.0.0.1:10808\ntgpilot ping',
@@ -115,6 +120,11 @@ export const HELP = {
       title: 'بکاپ‌ها',
       text: 'قبل از هر تغییر بزرگ یک کپی از پروژه بگیر. اگر ربات خراب شد، با یک کلیک برگردانش — وضعیت همان لحظه خودش یک بکاپ می‌شود، پس بازگردانی هیچ‌وقت کارت را نمی‌خورد.',
       code: 'tgpilot backup\ntgpilot backups\ntgpilot restore <id>',
+    },
+    {
+      title: 'پروفایل ربات و دکمه‌اش',
+      text: 'ربات پروفایل خودش را دارد: نام، توضیح کوتاه و بلند، و دکمه‌ی کنار کادر پیام. استودیو و خط فرمان همین سه چیز را ویرایش می‌کنند؛ دکمه می‌تواند یک مینی‌اپ، فهرست دستورات یا منوی خود تلگرام را باز کند.',
+      code: 'tgpilot bot\ntgpilot bot name "Weather Fox"\ntgpilot bot menu https://example.com/app Open',
     },
     {
       title: 'وقتی کلود در دسترس نیست',
@@ -189,6 +199,11 @@ export const HELP = {
       code: 'tgpilot backup\ntgpilot backups\ntgpilot restore <id>',
     },
     {
+      title: '机器人资料与按钮',
+      text: '机器人有自己的资料：名称、简短和详细简介，以及消息输入框旁的按钮。工作室和命令行编辑的是同样的三项；按钮可以打开小程序、命令列表，或 Telegram 自带的菜单。',
+      code: 'tgpilot bot\ntgpilot bot name "Weather Fox"\ntgpilot bot menu https://example.com/app Open',
+    },
+    {
       title: '连不上云端时',
       text: '「网络」卡片会说明这台机器如何连到云端：正在运行的代理、DNS 的回答和路由。如果你的网络屏蔽了 telegram.org，就给 tgpilot 指一个代理 —— HTTP 或 SOCKS5 都行，类型会自动识别。',
       code: 'export TGPILOT_PROXY=socks5://127.0.0.1:10808\ntgpilot ping',
@@ -259,6 +274,11 @@ export const HELP = {
       title: 'Резервные копии',
       text: 'Сохраните копию проекта перед большим изменением. Если бот сломается, верните всё одним щелчком — состояние на тот момент сохраняется отдельной копией, так что восстановление ничего не уничтожит.',
       code: 'tgpilot backup\ntgpilot backups\ntgpilot restore <id>',
+    },
+    {
+      title: 'Профиль бота и его кнопка',
+      text: 'У бота есть собственный профиль: имя, краткое и длинное описание, и кнопка рядом с полем ввода. Студия и командная строка правят одно и то же; кнопка может открывать мини-приложение, список команд или меню самого Telegram.',
+      code: 'tgpilot bot\ntgpilot bot name "Weather Fox"\ntgpilot bot menu https://example.com/app Open',
     },
     {
       title: 'Когда облако недоступно',

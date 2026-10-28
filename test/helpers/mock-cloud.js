@@ -40,9 +40,67 @@ export function createMockCloud() {
         },
         dbChanges: [],
         runs: [],
+        botApiCalls: [],
+        // The bot's own profile, the way Telegram would keep it.
+        profile: {
+          username: `mock_${appId}`,
+          id: 1000000 + Number(String(appId).replace(/\D/g, '')) || 1,
+          name: 'Mock Bot',
+          description: '',
+          short: '',
+          menu: { type: 'default' },
+        },
       });
     }
     return token;
+  }
+
+  // What `api.<method>()` does inside the isolate. The platform hands the
+  // call to Telegram; here the same handful of methods is answered from the
+  // bot's own profile, and anything else is refused the way Telegram would.
+  function botApi(b, method, params = {}) {
+    const p = b.profile;
+    switch (method) {
+      case 'getMe':
+        return { id: p.id, is_bot: true, first_name: p.name, username: p.username };
+      case 'getMyName':
+        return { name: p.name };
+      case 'setMyName':
+        p.name = String(params.name ?? '');
+        return { name: p.name };
+      case 'getMyDescription':
+        return { description: p.description };
+      case 'setMyDescription':
+        p.description = String(params.description ?? '');
+        return { description: p.description };
+      case 'getMyShortDescription':
+        return { short_description: p.short };
+      case 'setMyShortDescription':
+        p.short = String(params.short_description ?? '');
+        return { short_description: p.short };
+      case 'getChatMenuButton':
+        return { menu_button: p.menu };
+      case 'setChatMenuButton': {
+        const button = params.menu_button || {};
+        if (!['default', 'commands', 'web_app'].includes(button.type)) {
+          const bad = new Error('Bad Request: wrong menu button type');
+          bad.code = 400;
+          throw bad;
+        }
+        if (button.type === 'web_app' && !/^https:\/\//.test(String(button.web_app?.url || ''))) {
+          const bad = new Error('Bad Request: menu button web app url must be https');
+          bad.code = 400;
+          throw bad;
+        }
+        p.menu = button;
+        return true;
+      }
+      default: {
+        const bad = new Error(`Bad Request: unknown method ${method}`);
+        bad.code = 404;
+        throw bad;
+      }
+    }
   }
 
   const send = (res, status, payload, ok = true) => {
@@ -186,6 +244,14 @@ export function createMockCloud() {
         if (code == null) return err(res, 404, `Unknown module ${module}`);
         const log = [{ _: 'log', t: 0.001, m: `ran ${module}` }];
         const fakeConsole = { log: (...l) => log.push({ _: 'log', t: 0.002, m: l.map(String).join(' ') }) };
+        const api = new Proxy({}, {
+          get(_target, method) {
+            return async (params) => {
+              b.botApiCalls.push({ module, method: String(method), params: params || {} });
+              return botApi(b, String(method), params || {});
+            };
+          },
+        });
         // The mock keeps the transpile step tiny: strip imports, turn the
         // default export into a binding, and run it.
         const transpiled = code
@@ -195,12 +261,13 @@ export function createMockCloud() {
           .replace(/export\s*\{[^}]*\}\s*;?/mg, '');
         try {
           const fnSrc = `return (async () => { ${transpiled}\n if (typeof main === 'undefined') throw new Error('module has no default export'); return main(sdkArgs, sdkCtx); })()`;
-          const loader = new Function('console', 'sdkArgs', 'sdkCtx', fnSrc);
-          const result = await loader(fakeConsole, args, ctx);
+          const loader = new Function('console', 'sdkArgs', 'sdkCtx', 'api', fnSrc);
+          const result = await loader(fakeConsole, args, ctx, api);
           b.runs.push({ module, args });
           return send(res, 200, { log, result, time: 0.05 });
         } catch (e) {
-          return err(res, 400, String(e.message || e), { parameters: { log, time: 0.1 } });
+          const code = Number.isFinite(e?.code) ? e.code : 400;
+          return err(res, code, String(e.message || e), { parameters: { log, time: 0.1 } });
         }
       }
 

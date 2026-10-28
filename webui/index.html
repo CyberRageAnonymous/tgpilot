@@ -45,6 +45,16 @@
         <span class="chev">›</span>
       </button>
 
+      <button class="section-row" data-open="bot">
+        <span class="section-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.6" r="3.4"/><path d="M5.2 20.4c.9-3.3 3.5-5.1 6.8-5.1s5.9 1.8 6.8 5.1"/></svg></span>
+        <span class="section-text">
+          <span class="section-title" data-i18n="section.bot">Bot profile</span>
+          <span class="section-sub" id="sub-bot" data-i18n="section.botSub">name, description, menu</span>
+        </span>
+        <span class="count" id="cnt-bot"></span>
+        <span class="chev">›</span>
+      </button>
+
       <button class="section-row" data-open="handlers">
         <span class="section-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 2.2 6.4 13.1h4.7l-1.3 8.7 7-11.2h-4.8l1.2-8.4z" fill="currentColor" stroke="none"/></svg></span>
         <span class="section-text">
@@ -143,6 +153,58 @@
           <span class="link-logo"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4l16 16M20 4 4 20"/></svg></span>
           <span class="k">X (Twitter)</span><span class="v">x.com/CyberRageAnon</span>
         </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- The bot's own profile -->
+  <section id="view-bot" class="view" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2 data-i18n="bot.identity">Who the bot is</h2></div>
+      <p class="about-text" id="bot-who"></p>
+      <div class="stack">
+        <label class="field">
+          <span class="field-label" data-i18n="bot.name">Name</span>
+          <input id="bot-name" type="text" spellcheck="false" data-i18n-placeholder="bot.namePh" placeholder="Weather Fox">
+        </label>
+        <label class="field">
+          <span class="field-label" data-i18n="bot.short">Short description</span>
+          <input id="bot-short" type="text" spellcheck="false" data-i18n-placeholder="bot.shortPh" placeholder="Weather, hourly.">
+        </label>
+        <label class="field">
+          <span class="field-label" data-i18n="bot.description">Long description</span>
+          <textarea id="bot-description" rows="4" spellcheck="false" data-i18n-placeholder="bot.descriptionPh" placeholder="What this bot does, in a few sentences."></textarea>
+        </label>
+        <div class="stack-row">
+          <button id="btn-bot-save" class="primary small" data-i18n="bot.save">Save profile</button>
+        </div>
+        <p class="hint" data-i18n="bot.hint">Telegram keeps these; the tool only writes them.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2 data-i18n="bot.menuTitle">The button beside the message field</h2></div>
+      <p class="about-text" data-i18n="bot.menuText">What that button opens in a chat with the bot.</p>
+      <div class="stack">
+        <label class="field">
+          <span class="field-label" data-i18n="bot.menuKind">Button</span>
+          <select id="bot-menu-type" class="select">
+            <option value="default" data-i18n="bot.menuDefault">Telegram's own</option>
+            <option value="commands" data-i18n="bot.menuCommands">The command list</option>
+            <option value="web_app" data-i18n="bot.menuApp">A Mini App</option>
+          </select>
+        </label>
+        <label class="field" id="bot-menu-text-field">
+          <span class="field-label" data-i18n="bot.menuLabel">Button text</span>
+          <input id="bot-menu-text" type="text" spellcheck="false" data-i18n-placeholder="bot.menuTextPh" placeholder="Open">
+        </label>
+        <label class="field" id="bot-menu-url-field">
+          <span class="field-label" data-i18n="bot.menuUrl">Mini App address</span>
+          <input id="bot-menu-url" type="text" spellcheck="false" placeholder="https://example.com/app">
+        </label>
+        <div class="stack-row">
+          <button id="btn-bot-menu-save" class="primary small" data-i18n="bot.menuSave">Save button</button>
+        </div>
       </div>
     </div>
   </section>

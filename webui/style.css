@@ -424,6 +424,19 @@ input::placeholder { color: #5f6879; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: rgba(110, 168, 255, .55); box-shadow: 0 0 0 3px rgba(110, 168, 255, .12); }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
+.field[hidden] { display: none; }
+textarea {
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  width: 100%;
+  resize: vertical;
+}
+textarea::placeholder { color: #5f6879; }
 .field-label { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .9px; color: var(--dim); }
 .checkbox-field { gap: 8px; }
 .switch { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
@@ -770,6 +783,13 @@ html[data-theme="luxury"] .run-out,
 html[data-theme="luxury"] .error-details,
 html[data-theme="luxury"] .help-tree,
 html[data-theme="luxury"] .help-code { background: rgba(0, 0, 0, .38); }
+
+html[data-theme="luxury"] input:focus,
+html[data-theme="luxury"] select:focus,
+html[data-theme="luxury"] textarea:focus {
+  border-color: rgba(217, 180, 106, .55);
+  box-shadow: 0 0 0 3px rgba(217, 180, 106, .12);
+}
 
 @media (prefers-reduced-motion: reduce) {
   html[data-theme="luxury"] body::before,

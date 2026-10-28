@@ -27,6 +27,7 @@ Commands:
   run <module>    run a handler in the cloud without deploying it
   migrate         apply pending schema changes to the database
   webhook         show the bot webhook state (webhook sync to repair)
+  bot [name|description|short|menu]  read or edit the bot's own profile
   logs [-n N]     read this tool's journal
   ping [--probe]  check how this machine reaches the cloud (proxy, DNS, route)
   backup [--label L]  save a copy of the project you can roll back to
@@ -131,6 +132,10 @@ export async function main(argv) {
     case 'ping': {
       const { registerPing } = await import('./commands/ping.js');
       return registerPing(rest);
+    }
+    case 'bot': {
+      const { registerBot } = await import('./commands/bot.js');
+      return registerBot(rest);
     }
     default: {
       console.error(`"${first}" is not a tgpilot command. Run "tgpilot help" to see the list.`);
