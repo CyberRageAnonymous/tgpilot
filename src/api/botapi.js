@@ -6,8 +6,10 @@ import { runFunction } from './endpoints.js';
 // token never leaves the cloud, and the call travels the network this machine
 // is configured to reach.
 
-const CALL_MODULE = 'endpoints/__tgpilot_botapi.js';
-const PROFILE_MODULE = 'endpoints/__tgpilot_profile.js';
+// Module names go to /run without a ".js" and inside a runnable directory —
+// the same shape pathToModule produces for `tgpilot run`.
+const CALL_MODULE = 'endpoints/tgpilot_botapi';
+const PROFILE_MODULE = 'endpoints/tgpilot_profile';
 
 const CALL_SOURCE = [
   "import { api } from 'sdk';",

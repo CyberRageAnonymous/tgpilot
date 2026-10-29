@@ -240,6 +240,17 @@ export function createMockCloud() {
 
       if (apiPath === '/run') {
         const { module, sources, args, ctx } = body;
+        // The cloud validates the module name before it looks for a source: a
+        // name carrying a ".js" or an odd character is refused, not resolved.
+        const name = typeof module === 'string' ? module : '';
+        const segments = name.split('/');
+        const wellFormed = name.length > 0 && segments.every((s) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(s));
+        if (!wellFormed) {
+          return err(res, 400, `Invalid module name: ${module}`, {
+            error_type: 'MODULE_NAME_INVALID',
+            parameters: { module: String(module), file: `handlers/${segments[segments.length - 1] || ''}` },
+          });
+        }
         const code = sources[module];
         if (code == null) return err(res, 404, `Unknown module ${module}`);
         const log = [{ _: 'log', t: 0.001, m: `ran ${module}` }];
