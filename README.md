@@ -18,6 +18,7 @@ migrations and keeps a full local journal of everything it did.
  tgpilot push        deploy changed modules + Mini App
  tgpilot run message '{ text: "hi" }'                   run before deploying
  tgpilot migrate     apply pending schema changes to the database
+ tgpilot bot         read or edit the bot's own profile
  tgpilot web         open the studio at 127.0.0.1:5177
 ```
 
